@@ -1,8 +1,9 @@
 import torch
 from torchvision import transforms, datasets, models, utils
 
+
 class EncoderCNN(torch.nn.Module):
-	def __init__(self, output_feature_dims = 500):
+	def __init__(self, output_feature_dims=500):
 		super(EncoderCNN, self).__init__()
 
 		self.model = models.resnet50(pretrained=True)

@@ -1,4 +1,3 @@
-
 # Courtesy of https://pytorch.org/tutorials/beginner/finetuning_torchvision_models_tutorial.html#initialize-and-reshape-the-networks
 
 from dataset import VRDataset
@@ -16,7 +15,7 @@ train_dataset_path = "data/train/train"
 
 data_transformations = {
 	'train': transforms.Compose([
-        transforms.Resize((input_size, input_size)),
+		transforms.Resize((input_size, input_size)),
 		# transforms.CenterCrop(input_size),
 		transforms.ToTensor(),
 		transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
@@ -34,5 +33,5 @@ dataloader = DataLoader(vrdataset, batch_size=1, shuffle=False, num_workers=0)
 
 encoder = EncoderCNN()
 for i, sample in enumerate(dataloader):
-    r = encoder.forward(sample['frames'][0])
-    print(r.shape)
+	r = encoder.forward(sample['frames'][0])
+	print(r.shape)
