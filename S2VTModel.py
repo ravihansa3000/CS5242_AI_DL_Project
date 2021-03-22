@@ -3,7 +3,6 @@ from torch import nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-
 class S2VTModel(nn.Module):
 	def __init__(self, vocab_size=117, dim_hidden=500, dim_word=500, max_len=4, dim_vid=500, sos_id=1000, eos_id=1001,
 	             n_layers=1, rnn_cell='lstm', rnn_dropout_p=0.2):
@@ -130,4 +129,4 @@ class S2VTModel(nn.Module):
 		else:
 			raise RuntimeError(f"Unknown mode: {mode}")
 
-		return seq_probs, seq_preds
+		return seq_probs.squeeze(), seq_preds
