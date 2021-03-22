@@ -1,25 +1,53 @@
 import json
 import os
 import argparse
-
+import numpy as np
+import torch
+import torch as nn
+import torch.nn.functional as F
 import torch.optim as optim
-
 from S2VTModel import S2VTModel
-from feature_extractor import dataloader
+from feature_extractor import dataloader, training_annotation, encoder
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-def train(loader, model, optimizer, lr_scheduler, opt):
-	model.train()
+def train(dataloader, model, optimizer, lr_scheduler, opts):
+	loss_fn = torch.nn.CrossEntropyLoss()
 
-	for epoch in range(opt["epochs"]):
+	for epoch in range(opts["epochs"]):
+		batch_feats = []
+		batch_targets = []
+		batch_targets_one_hot = []
+
+		# step = 0
+
+		for video in dataloader:
+			annot = training_annotation[video['video_id'][0]]
+			annot_one_hot = F.one_hot(torch.LongTensor(annot), num_classes=opts["vocab_size"])
+			batch_targets.append(torch.LongTensor(training_annotation[video['video_id'][0]]))
+			batch_targets_one_hot.append(annot_one_hot)
+			frame_feats = []
+			for frame in video['frames']:
+				frame_feats.append(torch.Tensor(encoder(frame)))
+			batch_feats.append(torch.cat(frame_feats))
+
+			# step += 1
+			# if step == 2:
+			# 	break
+
+		batch_feats = torch.cat(batch_feats).reshape(-1, len(video['frames']), opts["dim_vid"])
+		batch_targets = torch.cat(batch_targets).reshape(-1, opts["max_len"] - 1)
+		batch_targets_one_hot = torch.cat(batch_targets_one_hot).reshape(-1, opts["max_len"] - 1, opts["vocab_size"])
+		outputs = model(batch_feats, batch_targets)
+
+		# loss = loss_fn(outputs[0].reshape(-1), batch_targets_one_hot.reshape(-1))
+		optimizer.zero_grad()
+		# loss.backward()
 		optimizer.step()
 		lr_scheduler.step()
 
-		iteration = 0
-
-		for data in loader:
-			pass
-
+		# if epoch % 1 == 0:
+		# 	print (f'Epoch {epoch + 1}/{opts["epochs"]}, Loss: {loss.item():.4f}')
 
 def main(opts):
 	model = None
@@ -27,13 +55,13 @@ def main(opts):
 
 	if opts["model"] == 'S2VTModel':
 		model = S2VTModel(
-			opts["vocab_size"],
-			opts["max_len"],
-			opts["dim_hidden"],
-			opts["dim_word"],
-			opts['dim_vid'],
-			rnn_cell=opts['rnn_type'],
+			vocab_size=opts["vocab_size"],
+			dim_hidden=opts['dim_hidden'],
+			dim_word=opts['dim_word'],
+			max_len=opts["max_len"],
+			dim_vid=opts["dim_vid"],
 			n_layers=opts['num_layers'],
+			rnn_cell=opts['rnn_type'],
 			rnn_dropout_p=opts["rnn_dropout_p"])
 
 	# model = model.cuda()
