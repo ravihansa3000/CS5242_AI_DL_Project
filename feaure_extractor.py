@@ -72,5 +72,5 @@ sample = next(iter(dataloader))
 
 encoder = EncoderCNN()
 for i, sample in enumerate(dataloader):
-    r = encoder.forward(sample['frames'])
-    print(r.shape)
+    encoded = encoder.forward(sample['frames'])
+    print(encoded.shape)
