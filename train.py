@@ -5,7 +5,7 @@ import argparse
 import torch.optim as optim
 
 from S2VTModel import S2VTModel
-from feaure_extractor import dataloader
+from feature_extractor import dataloader
 
 
 def train(loader, model, optimizer, lr_scheduler, opt):
