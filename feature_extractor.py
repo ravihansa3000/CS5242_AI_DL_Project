@@ -45,7 +45,6 @@ else:
 	for i, sample in enumerate(dataloader):
 		for j, frame in enumerate(sample['frames']):
 			features = encoder(sample['frames'][j])
-			break
 
 	# save CNN encoder state dict
 	torch.save(encoder.state_dict(), FILE)
