@@ -48,4 +48,4 @@ else:
 			features = encoder(sample['frames'][j])
 
 	# save CNN encoder state dict
-	torch.save(encoder.state_dict(), FILE)encoder = EncoderCNN(input_feature_dims, output_feature_dims)
+	torch.save(encoder.state_dict(), FILE)encoder = EncoderCNN(input_feature_dims, output_feature_dims)encoder = EncoderCNN(input_feature_dims, output_feature_dims)
