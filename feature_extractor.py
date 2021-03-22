@@ -39,13 +39,15 @@ dataloader = DataLoader(vrdataset, batch_size=1, shuffle=False, num_workers=0)
 with open (train_annotation_path) as f:
 	training_annotation = json.load(f)
 
-if os.path.isfile(FILE):
-	encoder.load_state_dict(torch.load(FILE))
-	encoder.eval()
-else:
-	for i, sample in enumerate(dataloader):
-		for j, frame in enumerate(sample['frames']):
-			features = encoder(sample['frames'][j])
+# if os.path.isfile(FILE):
+# 	encoder.load_state_dict(torch.load(FILE))
+# 	encoder.eval()
+# else:
+# 	for i, sample in enumerate(dataloader):
+# 		for j, frame in enumerate(sample['frames']):
+# 			features = encoder(sample['frames'][j])
 
-	# save CNN encoder state dict
-	torch.save(encoder.state_dict(), FILE)encoder = EncoderCNN(input_feature_dims, output_feature_dims)encoder = EncoderCNN(input_feature_dims, output_feature_dims)
+# 	# save CNN encoder state dict
+# 	torch.save(encoder.state_dict(), FILE)
+	
+encoder = EncoderCNN(input_feature_dims, output_feature_dims)
