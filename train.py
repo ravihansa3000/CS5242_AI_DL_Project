@@ -20,7 +20,8 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 	with open (opts["train_annotation_path"]) as f:
 		training_annotation = json.load(f)
 	
-	for epoch in range(1):
+	print ("Starting training for {} epochs...".format(opts["epochs"]))
+	for epoch in range(opts["epochs"]):
 		model.zero_grad()
 		model.train()
 		
