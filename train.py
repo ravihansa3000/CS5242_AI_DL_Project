@@ -15,14 +15,15 @@ from dataset import VRDataset
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+
 def train(dataloader, model, optimizer, lr_scheduler, opts):
 	loss_fns = [torch.nn.CrossEntropyLoss() for i in range(3)]
-	with open (opts["train_annotation_path"]) as f:
+	with open(opts["train_annotation_path"]) as f:
 		training_annotation = json.load(f)
-	
-	print ("Starting training for {} epochs...".format(opts["epochs"]))
+
+	print("Starting training for {} epochs...".format(opts["epochs"]))
 	for epoch in range(opts["epochs"]):
-		
+
 		step = 0
 		for video_batch in dataloader:
 			model.zero_grad()
@@ -32,15 +33,19 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			annot = torch.LongTensor([training_annotation[ID] for ID in video_ids])
 			output, _ = model(x=videos_tensor, target_variable=annot)
 
-			loss = loss_fns[0](output[:, 0, :], annot[:, 0]) + loss_fns[1](output[:, 1, :], annot[:, 1]) + loss_fns[2](output[:, 2, :], annot[:, 2])
+			loss = loss_fns[0](output[:, 0, :], annot[:, 0]) + \
+			       loss_fns[1](output[:, 1, :], annot[:, 1]) + \
+			       loss_fns[2](output[:, 2, :], annot[:, 2])
 			loss.backward()
 			optimizer.step()
 			lr_scheduler.step()
-			print (f"Loss at step {step}: ", loss.item())
+			print(f"Loss at step {step}: ", loss.item())
 
 			# TODO Validation
 			# ...
-			step += 1	
+			step += 1
+
+
 def main(opts):
 	model = None
 	opts["vocab_size"] = 117
@@ -77,7 +82,8 @@ def main(opts):
 	                                             gamma=opts["learning_rate_decay_rate"])
 
 	vrdataset = VRDataset(img_root=opts["train_dataset_path"], transform=data_transformations["train"])
-	dataloader = DataLoader(vrdataset, batch_size=opts["batch_size"], shuffle=opts["shuffle"], num_workers=opts["num_workers"])
+	dataloader = DataLoader(vrdataset, batch_size=opts["batch_size"], shuffle=opts["shuffle"],
+	                        num_workers=opts["num_workers"])
 	train(dataloader, model, optimizer, exp_lr_scheduler, opts)
 
 
@@ -107,12 +113,13 @@ if __name__ == '__main__':
 	parser.add_argument('--checkpoint_path', type=str, default='save', help='directory to store checkpointed models')
 	parser.add_argument('--weight_decay', type=float, default=5e-4,
 	                    help='weight_decay. strength of weight regularization')
-	
+
 	parser.add_argument('--gpu', type=str, default='0', help='gpu device number')
 	parser.add_argument('--shuffle', type=bool, default=False, help="boolean indicating shuffle required or not")
 	parser.add_argument('--train_dataset_path', type=str, default="data/train/train", help="train dataset path")
 	parser.add_argument('--num_workers', type=int, default=0, help="number of workers to load batch")
-	parser.add_argument('--train_annotation_path', type=str, default="data/training_annotation.json", help="path to training annotations")
+	parser.add_argument('--train_annotation_path', type=str, default="data/training_annotation.json",
+	                    help="path to training annotations")
 	parser.add_argument('--resolution', type=int, default=224, help="frame resolution")
 
 	args = parser.parse_args()

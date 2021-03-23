@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from encoder import EncoderCNN
 
+
 class S2VTModel(nn.Module):
 	def __init__(self, vocab_size=117, dim_hidden=500, dim_word=500, max_len=4, dim_vid=500, sos_id=117,
 	             n_layers=1, rnn_cell='lstm', rnn_dropout_p=0.2, cnn_output_feature_dims=500):
@@ -13,7 +14,7 @@ class S2VTModel(nn.Module):
 		elif rnn_cell.lower() == 'gru':
 			self.rnn_cell = nn.GRU
 
-		# intialize the encoder cnn		
+		# intialize the encoder cnn
 		self.encoder = EncoderCNN(output_feature_dims=cnn_output_feature_dims)
 
 		# features of video frames are embedded to a 500 dimensional space
@@ -26,7 +27,8 @@ class S2VTModel(nn.Module):
 		# words are transformed to 500 feature dimension
 		self.dim_word = dim_word
 
-		# annotation attributes: <object1, relationship, object2> + <sos>
+		# annotation attributes: <sos>, object1, relationship
+		# object2 is only predicted at the end
 		self.max_length = max_len
 
 		# start-of-sentence and end-of-sentence ids
@@ -41,25 +43,26 @@ class S2VTModel(nn.Module):
 
 		self.out = nn.Linear(self.dim_hidden, self.dim_output)
 
-	def forward(self, x: torch.Tensor, target_variable=None, opt={}):
+	def forward(self, x: torch.Tensor, target_variable=None, opts=None):
 		"""
-		:param x: Tensor containing video features of shape (batch_size, seq_len, cnn_input_c, cnn_input_h, cnn_input_w)
+		:param x: Tensor containing video features of shape (batch_size, n_frames, cnn_input_c, cnn_input_h, cnn_input_w)
+			n_frames is the number of video frames
 
 		:param target_variable: target labels of the ground truth annotations of shape (batch_size, max_length - 1)
 			Each row corresponds to a set of training annotations; (object1, relationship, object2)
 
 		:param mode: 'train' or 'test'
 
-		:param opt: not used
+		:param opts: not used
 
 		:return:
 		"""
 
-		vid_feats = []
+		vid_imgs_encoded = []
 		for i in range(x.shape[0]):
-			vid_feats.append(self.encoder(x[i]))
-		
-		vid_feats = torch.stack(vid_feats, dim=0) # vid_feats: (batch_size, seq_len, dim_vid)
+			vid_imgs_encoded.append(self.encoder(x[i]))
+
+		vid_feats = torch.stack(vid_imgs_encoded, dim=0)  # vid_feats: (batch_size, n_frames, dim_vid)
 
 		batch_size, n_frames, _ = vid_feats.shape
 
@@ -76,13 +79,13 @@ class S2VTModel(nn.Module):
 
 		# feed the video features into the first layer of RNN
 		# only 30 steps will be performed since n_frames is always 30 (based on train/test data)
-		output1, state1 = self.rnn1(vid_feats, state1)  # output1: (30, batch_size, dim_vid)
+		output1, state1 = self.rnn1(vid_feats, state1)  # output1: (batch_size, 30, dim_vid)
 
 		# concatenate paddings (for the 2nd layer) with output from the 1st layer
-		input2 = torch.cat((output1, padding_words), dim=2)  # input2: (30, batch_size, dim_word)
+		input2 = torch.cat((output1, padding_words), dim=2)  # input2: (batch_size, 30, dim_word)
 
 		# feed concatenated output from 1st layer to the 2nd layer
-		output2, state2 = self.rnn2(input2, state2)  # output2: (30, batch_size, dim_word)
+		output2, state2 = self.rnn2(input2, state2)  # output2: (batch_size, 30, dim_word)
 
 		seq_probs = []
 		seq_preds = []
