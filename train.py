@@ -22,11 +22,12 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 	
 	print ("Starting training for {} epochs...".format(opts["epochs"]))
 	for epoch in range(opts["epochs"]):
-		model.zero_grad()
-		model.train()
 		
 		step = 0
 		for video_batch in dataloader:
+			model.zero_grad()
+			model.train()
+
 			video_ids, videos_tensor = video_batch
 			annot = torch.LongTensor([training_annotation[ID] for ID in video_ids])
 			output, _ = model(x=videos_tensor, target_variable=annot)
