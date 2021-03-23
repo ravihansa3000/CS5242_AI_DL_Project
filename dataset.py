@@ -25,8 +25,4 @@ class VRDataset(Dataset):
 		if self.transform:
 			images = [self.transform(image) for image in images]
 
-		ret = {
-			'video_id': dir_name,
-			'frames': images
-		}
-		return ret
+		return dir_name, torch.stack(images)

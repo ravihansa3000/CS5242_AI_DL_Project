@@ -2,15 +2,19 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.autograd import Variable
+from encoder import EncoderCNN
 
 class S2VTModel(nn.Module):
-	def __init__(self, vocab_size=117, dim_hidden=500, dim_word=500, max_len=4, dim_vid=500, sos_id=1000, eos_id=1001,
-	             n_layers=1, rnn_cell='lstm', rnn_dropout_p=0.2):
+	def __init__(self, vocab_size=117, dim_hidden=500, dim_word=500, max_len=4, dim_vid=500, sos_id=117,
+	             n_layers=1, rnn_cell='lstm', rnn_dropout_p=0.2, cnn_output_feature_dims=500):
 		super(S2VTModel, self).__init__()
 		if rnn_cell.lower() == 'lstm':
 			self.rnn_cell = nn.LSTM
 		elif rnn_cell.lower() == 'gru':
 			self.rnn_cell = nn.GRU
+
+		# intialize the encoder cnn		
+		self.encoder = EncoderCNN(output_feature_dims=cnn_output_feature_dims)
 
 		# features of video frames are embedded to a 500 dimensional space
 		self.dim_vid = dim_vid
@@ -27,10 +31,9 @@ class S2VTModel(nn.Module):
 
 		# start-of-sentence and end-of-sentence ids
 		self.sos_id = sos_id
-		self.eos_id = eos_id
 
-		# word embeddings lookup table with
-		self.embedding = nn.Embedding(self.dim_output, self.dim_word)
+		# word embeddings lookup table with; + 1 for <sos>
+		self.embedding = nn.Embedding(self.dim_output + 1, self.dim_word)
 
 		self.rnn1 = self.rnn_cell(self.dim_vid, self.dim_hidden, n_layers, batch_first=True, dropout=rnn_dropout_p)
 		self.rnn2 = self.rnn_cell(self.dim_hidden + self.dim_word, self.dim_hidden, n_layers,
@@ -38,11 +41,11 @@ class S2VTModel(nn.Module):
 
 		self.out = nn.Linear(self.dim_hidden, self.dim_output)
 
-	def forward(self, vid_feats: torch.Tensor, target_variable=None, mode='train', opt={}):
+	def forward(self, x: torch.Tensor, target_variable=None, opt={}):
 		"""
-		:param vid_feats: Tensor containing video features of shape (seq_len, batch_size, dim_vid)
+		:param x: Tensor containing video features of shape (batch_size, seq_len, cnn_input_c, cnn_input_h, cnn_input_w)
 
-		:param target_variable: target labels of the ground truth annotations of shape (batch_size, max_length)
+		:param target_variable: target labels of the ground truth annotations of shape (batch_size, max_length - 1)
 			Each row corresponds to a set of training annotations; (object1, relationship, object2)
 
 		:param mode: 'train' or 'test'
@@ -51,6 +54,12 @@ class S2VTModel(nn.Module):
 
 		:return:
 		"""
+
+		vid_feats = []
+		for i in range(x.shape[0]):
+			vid_feats.append(self.encoder(x[i]))
+		
+		vid_feats = torch.stack(vid_feats, dim=0) # vid_feats: (batch_size, seq_len, dim_vid)
 
 		batch_size, n_frames, _ = vid_feats.shape
 
@@ -81,7 +90,9 @@ class S2VTModel(nn.Module):
 		# By this point we have already fed input features (of 30 frames) to 1st layer of LSTM and padded concatenated
 		# inputs to 2nd layer of LSTM. Remaining 3 steps will be performed using word embeddings
 
-		if mode == 'train':
+		if self.training:
+			sos_tensor = torch.LongTensor([[self.sos_id]] * batch_size)
+			target_variable = torch.cat((sos_tensor, target_variable), dim=1)
 			for i in range(self.max_length - 1):
 				# generate word embeddings using the i-th column (batch_size * 1)
 				current_words = self.embedding(target_variable[:, i])
@@ -99,12 +110,11 @@ class S2VTModel(nn.Module):
 
 				# feed RNN output to linear layer and get probabilities for each classification
 				logits = self.out(output2.squeeze(1))  # logits: (batch_size, dim_output)
-				logits = F.log_softmax(logits, dim=1)
 				seq_probs.append(logits.unsqueeze(1))  # seq_probs: (batch_size, 1, dim_output)
 
 			seq_probs = torch.stack(seq_probs, 1)  # seq_probs: (batch_size, 3, dim_output)
 
-		elif mode == 'test':
+		else:
 			current_words = self.embedding(Variable(torch.LongTensor([self.sos_id] * batch_size)).cuda())
 			for i in range(self.max_length - 1):
 				# optimize for GPU (applicable only when CUDA/GPU capability is present in the system)
@@ -125,8 +135,5 @@ class S2VTModel(nn.Module):
 
 			seq_probs = torch.stack(seq_probs, 1)  # seq_probs: (batch_size, 3, dim_output)
 			seq_preds = torch.stack(seq_preds, 1)  # seq_probs: (batch_size, 3, 1)
-
-		else:
-			raise RuntimeError(f"Unknown mode: {mode}")
 
 		return seq_probs.squeeze(), seq_preds

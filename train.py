@@ -6,52 +6,55 @@ import torch
 import torch as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import sys
+
 from S2VTModel import S2VTModel
-from feature_extractor import dataloader, training_annotation, encoder
+from torch.utils.data import DataLoader
+from torchvision import transforms
+from dataset import VRDataset
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def train(dataloader, model, optimizer, lr_scheduler, opts):
-	loss_fn = torch.nn.CrossEntropyLoss()
+	loss_fns = [torch.nn.CrossEntropyLoss() for i in range(3)]
+	with open (opts["train_annotation_path"]) as f:
+		training_annotation = json.load(f)
+	
+	for epoch in range(1):
+		model.zero_grad()
+		model.train()
+		
+		step = 0
+		for video_batch in dataloader:
+			video_ids, videos_tensor = video_batch
+			annot = torch.LongTensor([training_annotation[ID] for ID in video_ids])
+			output, _ = model(x=videos_tensor, target_variable=annot)
 
-	for epoch in range(opts["epochs"]):
-		batch_feats = []
-		batch_targets = []
-		batch_targets_one_hot = []
+			loss = loss_fns[0](output[:, 0, :], annot[:, 0]) + loss_fns[1](output[:, 1, :], annot[:, 1]) + loss_fns[2](output[:, 2, :], annot[:, 2])
+			loss.backward()
+			optimizer.step()
+			lr_scheduler.step()
+			print (f"Loss at step {step}: ", loss.item())
 
-		# step = 0
-
-		for video in dataloader:
-			annot = training_annotation[video['video_id'][0]]
-			annot_one_hot = F.one_hot(torch.LongTensor(annot), num_classes=opts["vocab_size"])
-			batch_targets.append(torch.LongTensor(training_annotation[video['video_id'][0]]))
-			batch_targets_one_hot.append(annot_one_hot)
-			frame_feats = []
-			for frame in video['frames']:
-				frame_feats.append(torch.Tensor(encoder(frame)))
-			batch_feats.append(torch.cat(frame_feats))
-
-			# step += 1
-			# if step == 2:
-			# 	break
-
-		batch_feats = torch.cat(batch_feats).reshape(-1, len(video['frames']), opts["dim_vid"])
-		batch_targets = torch.cat(batch_targets).reshape(-1, opts["max_len"] - 1)
-		batch_targets_one_hot = torch.cat(batch_targets_one_hot).reshape(-1, opts["max_len"] - 1, opts["vocab_size"])
-		outputs = model(batch_feats, batch_targets)
-
-		# loss = loss_fn(outputs[0].reshape(-1), batch_targets_one_hot.reshape(-1))
-		optimizer.zero_grad()
-		# loss.backward()
-		optimizer.step()
-		lr_scheduler.step()
-
-		# if epoch % 1 == 0:
-		# 	print (f'Epoch {epoch + 1}/{opts["epochs"]}, Loss: {loss.item():.4f}')
-
+			# TODO Validation
+			# ...
+			step += 1	
 def main(opts):
 	model = None
 	opts["vocab_size"] = 117
+
+	data_transformations = {
+		'train': transforms.Compose([
+			transforms.Resize((opts["resolution"], opts["resolution"])),
+			transforms.ToTensor(),
+			transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+		]),
+		'val': transforms.Compose([
+			transforms.Resize((opts["resolution"], opts["resolution"])),
+			transforms.ToTensor(),
+			transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+		])
+	}
 
 	if opts["model"] == 'S2VTModel':
 		model = S2VTModel(
@@ -71,6 +74,8 @@ def main(opts):
 	exp_lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=opts["learning_rate_decay_every"],
 	                                             gamma=opts["learning_rate_decay_rate"])
 
+	vrdataset = VRDataset(img_root=opts["train_dataset_path"], transform=data_transformations["train"])
+	dataloader = DataLoader(vrdataset, batch_size=opts["batch_size"], shuffle=opts["shuffle"], num_workers=opts["num_workers"])
 	train(dataloader, model, optimizer, exp_lr_scheduler, opts)
 
 
@@ -94,14 +99,20 @@ if __name__ == '__main__':
 	parser.add_argument('--learning_rate_decay_rate', type=float, default=0.8)
 
 	parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
-	parser.add_argument('--batch_size', type=int, default=128, help='minibatch size')
+	parser.add_argument('--batch_size', type=int, default=10, help='minibatch size')
 	parser.add_argument('--save_checkpoint_every', type=int, default=50,
 	                    help='how often to save a model checkpoint (in epoch)?')
 	parser.add_argument('--checkpoint_path', type=str, default='save', help='directory to store checkpointed models')
 	parser.add_argument('--weight_decay', type=float, default=5e-4,
 	                    help='weight_decay. strength of weight regularization')
-
+	
 	parser.add_argument('--gpu', type=str, default='0', help='gpu device number')
+	parser.add_argument('--shuffle', type=bool, default=False, help="boolean indicating shuffle required or not")
+	parser.add_argument('--train_dataset_path', type=str, default="data/train/train", help="train dataset path")
+	parser.add_argument('--num_workers', type=int, default=0, help="number of workers to load batch")
+	parser.add_argument('--train_annotation_path', type=str, default="data/training_annotation.json", help="path to training annotations")
+	parser.add_argument('--resolution', type=int, default=224, help="frame resolution")
+
 	args = parser.parse_args()
 
 	opts = vars(args)
