@@ -3,7 +3,8 @@ import json
 import os
 import argparse
 import time
-from subprocess import call
+import subprocess
+import logging
 
 import torch
 from torch.utils.data import DataLoader
@@ -15,6 +16,10 @@ from dataset import VRDataset
 from utils import save_checkpoint
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+logging.basicConfig(
+	format='%(asctime)s %(levelname)-8s %(message)s',
+	level=logging.INFO,
+	datefmt='%Y-%m-%d %H:%M:%S')
 
 
 def train(dataloader, model, optimizer, lr_scheduler, opts):
@@ -22,8 +27,8 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 	with open(opts["train_annotation_path"]) as f:
 		training_annotation = json.load(f)
 
-	print(f"Starting training at {opts['start_epoch']} epochs and will run for {opts['end_epoch']} epochs "
-	      f"using device: {device}")
+	logging.info(f"Starting training at {opts['start_epoch']} epochs and will run for {opts['end_epoch']} epochs "
+	             f"using device: {device}")
 	loss = None
 	for epoch in range(opts["start_epoch"], opts["end_epoch"]):
 		step = 0
@@ -42,7 +47,7 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			loss.backward()
 			optimizer.step()
 			lr_scheduler.step()
-			print(f"Step update | batch_idx: {batch_idx}, step: {step}, loss: {loss.item()}")
+			logging.info(f"Step update | batch_idx: {batch_idx}, step: {step}, loss: {loss.item()}")
 			step += 1
 
 		if epoch % opts["save_checkpoint_every"] == 0:
@@ -52,11 +57,12 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 				'state_dict': model.state_dict(),
 				'optimizer': optimizer.state_dict()
 			}, filename=save_file_path)
-			print(f"model saved to {save_file_path}")
+			logging.info(f"Model saved to {save_file_path}")
 
 			model_info_path = os.path.join(opts["checkpoint_path"], 'model_score.txt')
-			with open(model_info_path, 'a') as f:
-				f.write(f"model update | epoch: {epoch}, loss: {loss:.6f} \n\n")
+			with open(model_info_path, 'a') as fh:
+				time_str = time.strftime("%Y-%m-%d %H:%M:%S")
+				fh.write(f"{time_str} | model update --- epoch: {epoch}, loss: {loss:.6f} \n\n")
 
 
 def main(opts):
@@ -92,12 +98,12 @@ def main(opts):
 
 	if opts["resume"]:
 		if os.path.isfile(opts["resume"]):
-			print(f'loading checkpoint {opts["resume"]}')
+			logging.info(f'loading checkpoint {opts["resume"]}')
 			checkpoint = torch.load(args.resume)
 			model.load_state_dict(checkpoint['state_dict'])
-			print(f'loaded checkpoint {opts["resume"]}')
+			logging.info(f'loaded checkpoint {opts["resume"]}')
 		else:
-			print(f'no checkpoint found at {opts["resume"]}')
+			logging.info(f'no checkpoint found at {opts["resume"]}')
 
 	optimizer = optim.Adam(model.parameters(), lr=opts["learning_rate"], weight_decay=opts["weight_decay"])
 
@@ -129,8 +135,8 @@ if __name__ == '__main__':
 	                    help='every how many iterations thereafter to drop LR?(in epoch)')
 	parser.add_argument('--learning_rate_decay_rate', type=float, default=0.8)
 	parser.add_argument('--start_epoch', type=int, default=0, help='starting epoch number (useful in restarts)')
-	parser.add_argument('--end_epoch', type=int, default=10, help='ending epoch number')
-	parser.add_argument('--batch_size', type=int, default=10, help='minibatch size')
+	parser.add_argument('--end_epoch', type=int, default=30, help='ending epoch number')
+	parser.add_argument('--batch_size', type=int, default=20, help='minibatch size')
 	parser.add_argument('--save_checkpoint_every', type=int, default=1,
 	                    help='how often to save a model checkpoint (in epoch)?')
 	parser.add_argument('--checkpoint_path', type=str, default='./model_run_data',
@@ -140,7 +146,7 @@ if __name__ == '__main__':
 
 	parser.add_argument('--gpu', type=str, default='', help='gpu device number')
 	parser.add_argument('--resume', type=str, default='', help='path to latest checkpoint (*.pth)')
-	parser.add_argument('--shuffle', type=bool, default=False, help="boolean indicating shuffle required or not")
+	parser.add_argument('--shuffle', type=bool, default=True, help="boolean indicating shuffle required or not")
 	parser.add_argument('--train_dataset_path', type=str, default="data/train/train", help="train dataset path")
 	parser.add_argument('--num_workers', type=int, default=0, help="number of workers to load batch")
 	parser.add_argument('--train_annotation_path', type=str, default="data/training_annotation.json",
@@ -155,22 +161,22 @@ if __name__ == '__main__':
 	if not os.path.isdir(opts["checkpoint_path"]):
 		os.mkdir(opts["checkpoint_path"])
 
-	print(json.dumps(opts, indent=4))
-	print(f'__Python VERSION: {sys.version}')
-	print(f'__pyTorch VERSION: {torch.__version__}')
-	with open(opt_json, 'w') as f:
-		json.dump(opts, f)
+	logging.info(json.dumps(opts, indent=4))
+	logging.info(f'__Python VERSION: {sys.version}')
+	logging.info(f'__pyTorch VERSION: {torch.__version__}')
+	with open(opt_json, 'w') as fh:
+		json.dump(opts, fh, indent=4)
 
 	# https://discuss.pytorch.org/t/cuda-visible-devices-make-gpu-disappear/21439
 	os.environ['CUDA_VISIBLE_DEVICES'] = opts["gpu"]
 	if opts["gpu"]:
-		print(f'__CUDNN VERSION: {torch.backends.cudnn.version()}')
-		print(f'__Number CUDA Devices: {torch.cuda.device_count()}')
-		print('__Devices')
-		call(["nvidia-smi", "--format=csv",
-		      "--query-gpu=index,name,driver_version,memory.total,memory.used,memory.free"])
-		print(f'Available devices {torch.cuda.device_count()}')
-		print(f'Current CUDA Device: GPU {torch.cuda.current_device()}')
-		print(f'Current CUDA Device Name: {torch.cuda.get_device_name(int(opts["gpu"]))}')
+		logging.info(f'__CUDNN VERSION: {torch.backends.cudnn.version()}')
+		logging.info(f'__Number CUDA Devices: {torch.cuda.device_count()}')
+		cuda_result = subprocess.call(
+			["nvidia-smi", "--format=csv",
+			 "--query-gpu=index,name,driver_version,memory.total,memory.used,memory.free"])
+		logging.info(f'Available devices {torch.cuda.device_count()}')
+		logging.info(f'Current CUDA Device: GPU {torch.cuda.current_device()}')
+		logging.info(f'Current CUDA Device Name: {torch.cuda.get_device_name(int(opts["gpu"]))}')
 
 	main(opts)
