@@ -9,4 +9,4 @@ dependencies:
   - jupyterlab=3.0
   - pytorch=1.7.1
   - torchvision=0.8.2
-  - matplotlib=3.3.4
+  - matplotlib=2.2.3

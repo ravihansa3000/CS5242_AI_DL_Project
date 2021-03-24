@@ -70,11 +70,11 @@ class S2VTModel(nn.Module):
 		# https://github.com/pytorch/pytorch/issues/3920
 		# paddings to be used for the 2nd layer
 		padding_words = Variable(
-			torch.empty(batch_size, n_frames, self.dim_word, dtype=vid_feats.dtype)).zero_().cuda()
+			torch.empty(batch_size, n_frames, self.dim_word, dtype=vid_feats.dtype)).zero_().to(device)
 
 		# paddings to be used for the 1st layer, added one by one in loop; shape of (batch_size * 1)
 		padding_frames = Variable(
-			torch.empty(batch_size, 1, self.dim_vid, dtype=vid_feats.dtype)).zero_().cuda()
+			torch.empty(batch_size, 1, self.dim_vid, dtype=vid_feats.dtype)).zero_().to(device)
 
 		# hidden and cell states of 2 LSTM layers
 		state1 = None
@@ -97,7 +97,7 @@ class S2VTModel(nn.Module):
 		# inputs to 2nd layer of LSTM. Remaining 3 steps will be performed using word embeddings
 
 		if self.training:
-			sos_tensor = Variable(torch.LongTensor([[self.sos_id]] * batch_size)).cuda()
+			sos_tensor = Variable(torch.LongTensor([[self.sos_id]] * batch_size)).to(device)
 			target_variable = torch.cat((sos_tensor, target_variable), dim=1)
 			for i in range(self.max_length - 1):
 				# generate word embeddings using the i-th column (batch_size * 1)
@@ -121,7 +121,7 @@ class S2VTModel(nn.Module):
 			seq_probs = torch.stack(seq_probs, 1)  # seq_probs: (batch_size, 3, dim_output)
 
 		else:
-			current_words = self.embedding(Variable(torch.LongTensor([self.sos_id] * batch_size)).cuda())
+			current_words = self.embedding(Variable(torch.LongTensor([self.sos_id] * batch_size)).to(device))
 			for i in range(self.max_length - 1):
 				# optimize for GPU (applicable only when CUDA/GPU capability is present in the system)
 				self.rnn1.flatten_parameters()
