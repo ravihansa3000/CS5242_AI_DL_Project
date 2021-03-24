@@ -37,7 +37,8 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			model.train()
 
 			videos_tensor = videos_tensor.to(device)
-			annot = torch.LongTensor([training_annotation[item] for item in video_ids]).to(device)
+			annot = torch.LongTensor([[training_annotation[item][0], training_annotation[item][1] + 35, training_annotation[item][2]]
+									 for item in video_ids]).to(device)
 			output, _ = model(x=videos_tensor, target_variable=annot)
 
 			loss = loss_fns[0](output[:, 0, :], annot[:, 0]) + \
