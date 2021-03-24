@@ -6,6 +6,8 @@ import time
 import subprocess
 import logging
 
+import numpy as np
+import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 import torch.optim as optim
@@ -83,6 +85,26 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 	
 	return model
 
+def test(dataloader, model):
+	preds = []
+	for batch_idx, (video_ids, videos_tensor) in enumerate(dataloader):
+		model.eval()
+		videos_tensor = videos_tensor.to(device)
+		with torch.no_grad():
+			output, _ = model(x=videos_tensor)
+			_, indices = torch.topk(output, k=5, dim=1)
+			preds.append(indices.tolist())
+
+	preds_df = pd.DataFrame(preds, columns=['object1', 'relationship', 'object2'])
+	preds_df.index = np.arange(1, len(preds_df) + 1)
+	preds_res = []
+	for pred in preds_df.stack():
+		preds_res.append(" ".join(map(str, pred)))
+	preds_res_df = pd.DataFrame(preds_res, columns=['label'])
+	preds_res_df.index.name = 'ID'
+	preds_res_df.index = np.arange(1, len(preds_res_df) + 1)
+	return preds_df, preds_res_df
+
 def main(opts):
 	model = None
 	opts["vocab_size"] = 117
@@ -111,29 +133,41 @@ def main(opts):
 			rnn_cell=opts['rnn_type'],
 			rnn_dropout_p=opts["rnn_dropout_p"]).to(device)
 
-	if opts["resume"]:
-		if os.path.isfile(opts["resume"]):
-			logging.info(f'loading checkpoint {opts["resume"]}')
-			checkpoint = torch.load(args.resume)
-			model.load_state_dict(checkpoint['state_dict'])
-			logging.info(f'loaded checkpoint {opts["resume"]}')
-		else:
-			logging.info(f'no checkpoint found at {opts["resume"]}')
+	if opts["objective"] == "train":
+		if opts["resume"]:
+			if os.path.isfile(opts["resume"]):
+				logging.info(f'loading checkpoint {opts["resume"]}')
+				checkpoint = torch.load(args.resume)
+				model.load_state_dict(checkpoint['state_dict'])
+				logging.info(f'loaded checkpoint {opts["resume"]}')
+			else:
+				logging.info(f'no checkpoint found at {opts["resume"]}')
 
-	optimizer = optim.Adam(model.parameters(), lr=opts["learning_rate"], weight_decay=opts["weight_decay"])
-
-	exp_lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=opts["learning_rate_decay_every"],
+		optimizer = optim.Adam(model.parameters(), lr=opts["learning_rate"], weight_decay=opts["weight_decay"])
+		exp_lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=opts["learning_rate_decay_every"],
 	                                             gamma=opts["learning_rate_decay_rate"])
-
-	vrdataset = VRDataset(img_root=opts["train_dataset_path"], transform=data_transformations["train"])
-	dataloader = DataLoader(vrdataset, batch_size=opts["batch_size"], shuffle=opts["shuffle"],
+		vrdataset = VRDataset(img_root=opts["train_dataset_path"], len=447, transform=data_transformations["train"])
+		dataloader = DataLoader(vrdataset, batch_size=opts["batch_size"], shuffle=opts["shuffle"],
 	                        num_workers=opts["num_workers"])
-	train(dataloader, model, optimizer, exp_lr_scheduler, opts)
+		train(dataloader, model, optimizer, exp_lr_scheduler, opts)
+	else:
+		vrdataset = VRDataset(img_root=opts["test_dataset_path"], len=119, transform=data_transformations["train"])
+		dataloader = DataLoader(vrdataset, batch_size=opts["test_batch_size"], num_workers=opts["num_workers"])
+		if os.path.isfile(opts["trained_model"]):
+			logging.info(f'loading trained model {opts["trained_model"]}')
+			model.load_state_dict(torch.load(opts['trained_model'], map_location=device)['state_dict'])
+			logging.info(f'loaded trained model {opts["trained_model"]}')
+			_, preds_res_df = test(dataloader, model)
+			preds_res_df.to_csv('preds.csv', index_label="ID")
+		else:
+			logging.info(f'no trained model found at {opts["trained_model"]}')
 
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
+	parser.add_argument('--objective', type=str, default="train", help="train/test")
 	parser.add_argument("--model", type=str, default='S2VTModel', help="with model to use")
+	parser.add_argument('--trained_model', type=str, default='trained_model.pth', help="load trained model for testing")
 	parser.add_argument("--max_len", type=int, default=4, help='max length of captions(containing <sos>)')
 	parser.add_argument('--dim_hidden', type=int, default=500, help='size of the rnn hidden layer')
 	parser.add_argument('--num_layers', type=int, default=1, help='number of layers in the RNN')
@@ -152,6 +186,7 @@ if __name__ == '__main__':
 	parser.add_argument('--start_epoch', type=int, default=0, help='starting epoch number (useful in restarts)')
 	parser.add_argument('--end_epoch', type=int, default=30, help='ending epoch number')
 	parser.add_argument('--batch_size', type=int, default=20, help='minibatch size')
+	parser.add_argument('--test_batch_size', type=int, default=1, help='batch size for testing')
 	parser.add_argument('--save_checkpoint_every', type=int, default=1,
 	                    help='how often to save a model checkpoint (in epoch)?')
 	parser.add_argument('--checkpoint_path', type=str, default='./model_run_data',
@@ -163,6 +198,7 @@ if __name__ == '__main__':
 	parser.add_argument('--resume', type=str, default='', help='path to latest checkpoint (*.pth)')
 	parser.add_argument('--shuffle', type=bool, default=True, help="boolean indicating shuffle required or not")
 	parser.add_argument('--train_dataset_path', type=str, default="data/train/train", help="train dataset path")
+	parser.add_argument('--test_dataset_path', type=str, default="data/test/test", help="test dataset path")
 	parser.add_argument('--num_workers', type=int, default=0, help="number of workers to load batch")
 	parser.add_argument('--train_annotation_path', type=str, default="data/training_annotation.json",
 	                    help="path to training annotations")
