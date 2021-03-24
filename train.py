@@ -50,6 +50,8 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			logging.info(f"Step update | batch_idx: {batch_idx}, step: {step}, loss: {loss.item()}")
 			step += 1
 
+		logging.info(f"Epoch update | epoch: {epoch}, loss: {loss.item()}")
+
 		if epoch % opts["save_checkpoint_every"] == 0:
 			save_file_path = os.path.join(opts["checkpoint_path"], f"model_{epoch}.pth")
 			save_checkpoint({
@@ -91,10 +93,7 @@ def main(opts):
 			dim_vid=opts["dim_vid"],
 			n_layers=opts['num_layers'],
 			rnn_cell=opts['rnn_type'],
-			rnn_dropout_p=opts["rnn_dropout_p"])
-
-	if opts["gpu"]:
-		model = model.cuda()
+			rnn_dropout_p=opts["rnn_dropout_p"]).to(device)
 
 	if opts["resume"]:
 		if os.path.isfile(opts["resume"]):
