@@ -1,8 +1,7 @@
-from torchvision import transforms, datasets
-from torch.utils.data import Dataset, DataLoader
-import torch, os
-import numpy as np
+import os
+import torch
 from PIL import Image
+from torch.utils.data import Dataset
 
 
 class VRDataset(Dataset):

@@ -4,6 +4,7 @@ import torchvision.models as models
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+
 class EncoderCNN(nn.Module):
 	def __init__(self, output_feature_dims=500):
 		"""Load the pretrained ResNet-50 and replace top fc layer."""
@@ -19,4 +20,3 @@ class EncoderCNN(nn.Module):
 		"""Extract feature vectors from input images."""
 		images = images.to(device)
 		return self.activation_fn(self.resnet(images))
-		
