@@ -51,8 +51,20 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			optimizer.step()
 			lr_scheduler.step()
 			logging.info(f"Step update | batch_idx: {batch_idx}, step: {step}, loss: {loss.item()}")
-			step += 1
 
+			true_pos_per_step = 0
+			total_per_step = len(annots) * 3
+			preds = torch.max(output, dim=2)
+			for (pred, annot) in zip(preds, annots):
+				true_pos_per_step += float((pred == annot).sum())
+			true_pos += true_pos_per_step
+			total += total_per_step
+			print(f'Accuracy at step {step}: ', true_pos_per_step / total_per_step * 100)
+
+			step += 1
+		
+		print(f'Accuracy at epoch {epoch}: ', true_pos / total * 100)
+			
 		logging.info(f"Epoch update | epoch: {epoch}, loss: {loss.item()}")
 
 		if epoch % opts["save_checkpoint_every"] == 0:
@@ -68,19 +80,6 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			with open(model_info_path, 'a') as fh:
 				time_str = time.strftime("%Y-%m-%d %H:%M:%S")
 				fh.write(f"{time_str} | model update --- epoch: {epoch}, loss: {loss:.6f} \n\n")
-
-
-			true_pos_per_step = 0
-			total_per_step = len(annots) * 3
-			preds = torch.max(output, dim=2)
-			for (pred, annot) in zip(preds, annots):
-				true_pos_per_step += float((pred == annot).sum())
-			true_pos += true_pos_per_step
-			total += total_per_step
-			print(f'Accuracy at step {step}: ', true_pos_per_step / total_per_step * 100)
-
-			step += 1
-		print(f'Accuracy at epoch {epoch}: ', true_pos / total * 100)
 	
 	return model
 
