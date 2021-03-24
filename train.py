@@ -1,44 +1,74 @@
+import sys
 import json
 import os
 import argparse
-import numpy as np
+import time
+import subprocess
+import logging
+
 import torch
-import torch as nn
-import torch.nn.functional as F
+from torch.utils.data import DataLoader
 import torch.optim as optim
-import sys
+from torchvision import transforms
 
 from S2VTModel import S2VTModel
-from torch.utils.data import DataLoader
-from torchvision import transforms
 from dataset import VRDataset
+from utils import save_checkpoint
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+logging.basicConfig(
+	format='%(asctime)s %(levelname)-8s %(message)s',
+	level=logging.INFO,
+	datefmt='%Y-%m-%d %H:%M:%S')
+
 
 def train(dataloader, model, optimizer, lr_scheduler, opts):
-	loss_fns = [torch.nn.CrossEntropyLoss() for i in range(3)]
+	loss_fns = [torch.nn.CrossEntropyLoss() for _ in range(3)]
 	with open(opts["train_annotation_path"]) as f:
 		training_annotation = json.load(f)
-	
-	print ("Starting training for {} epochs...".format(opts["epochs"]))
 
-	for epoch in range(opts["epochs"]):
+	logging.info(f"Starting training at {opts['start_epoch']} epochs and will run for {opts['end_epoch']} epochs "
+	             f"using device: {device}")
+	loss = None
+	for epoch in range(opts["start_epoch"], opts["end_epoch"]):
 		step = 0
 		true_pos = 0
 		total = 0
-		for video_batch in dataloader:
+		for batch_idx, (video_ids, videos_tensor) in enumerate(dataloader):
 			model.zero_grad()
 			model.train()
 
-			video_ids, videos_tensor = video_batch
-			annots = torch.LongTensor([training_annotation[id] for id in video_ids])
-			output, _ = model(x=videos_tensor, target_variable=annots)
+			videos_tensor = videos_tensor.to(device)
+			annot = torch.LongTensor([[training_annotation[item][0], training_annotation[item][1] + 35, training_annotation[item][2]]
+									 for item in video_ids]).to(device)
+			output, _ = model(x=videos_tensor, target_variable=annot)
 
-			loss = loss_fns[0](output[:, 0, :], annots[:, 0]) + loss_fns[1](output[:, 1, :], annots[:, 1]) + loss_fns[2](output[:, 2, :], annots[:, 2])
+			loss = loss_fns[0](output[:, 0, :], annot[:, 0]) + \
+			       loss_fns[1](output[:, 1, :], annot[:, 1]) + \
+			       loss_fns[2](output[:, 2, :], annot[:, 2])
+
 			loss.backward()
 			optimizer.step()
 			lr_scheduler.step()
-			print (f"Loss at step {step}: ", loss.item())
+			logging.info(f"Step update | batch_idx: {batch_idx}, step: {step}, loss: {loss.item()}")
+			step += 1
+
+		logging.info(f"Epoch update | epoch: {epoch}, loss: {loss.item()}")
+
+		if epoch % opts["save_checkpoint_every"] == 0:
+			save_file_path = os.path.join(opts["checkpoint_path"], f"model_{epoch}.pth")
+			save_checkpoint({
+				'epoch': epoch,
+				'state_dict': model.state_dict(),
+				'optimizer': optimizer.state_dict()
+			}, filename=save_file_path)
+			logging.info(f"Model saved to {save_file_path}")
+
+			model_info_path = os.path.join(opts["checkpoint_path"], 'model_score.txt')
+			with open(model_info_path, 'a') as fh:
+				time_str = time.strftime("%Y-%m-%d %H:%M:%S")
+				fh.write(f"{time_str} | model update --- epoch: {epoch}, loss: {loss:.6f} \n\n")
+
 
 			true_pos_per_step = 0
 			total_per_step = len(annots) * 3
@@ -64,7 +94,7 @@ def main(opts):
 			transforms.ToTensor(),
 			transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 		]),
-		'val': transforms.Compose([
+		'validate': transforms.Compose([
 			transforms.Resize((opts["resolution"], opts["resolution"])),
 			transforms.ToTensor(),
 			transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
@@ -80,9 +110,16 @@ def main(opts):
 			dim_vid=opts["dim_vid"],
 			n_layers=opts['num_layers'],
 			rnn_cell=opts['rnn_type'],
-			rnn_dropout_p=opts["rnn_dropout_p"])
+			rnn_dropout_p=opts["rnn_dropout_p"]).to(device)
 
-	# model = model.cuda()
+	if opts["resume"]:
+		if os.path.isfile(opts["resume"]):
+			logging.info(f'loading checkpoint {opts["resume"]}')
+			checkpoint = torch.load(args.resume)
+			model.load_state_dict(checkpoint['state_dict'])
+			logging.info(f'loaded checkpoint {opts["resume"]}')
+		else:
+			logging.info(f'no checkpoint found at {opts["resume"]}')
 
 	optimizer = optim.Adam(model.parameters(), lr=opts["learning_rate"], weight_decay=opts["weight_decay"])
 
@@ -90,7 +127,8 @@ def main(opts):
 	                                             gamma=opts["learning_rate_decay_rate"])
 
 	vrdataset = VRDataset(img_root=opts["train_dataset_path"], transform=data_transformations["train"])
-	dataloader = DataLoader(vrdataset, batch_size=opts["batch_size"], shuffle=opts["shuffle"], num_workers=opts["num_workers"])
+	dataloader = DataLoader(vrdataset, batch_size=opts["batch_size"], shuffle=opts["shuffle"],
+	                        num_workers=opts["num_workers"])
 	train(dataloader, model, optimizer, exp_lr_scheduler, opts)
 
 
@@ -112,29 +150,49 @@ if __name__ == '__main__':
 	parser.add_argument('--learning_rate_decay_every', type=int, default=200,
 	                    help='every how many iterations thereafter to drop LR?(in epoch)')
 	parser.add_argument('--learning_rate_decay_rate', type=float, default=0.8)
-
-	parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
-	parser.add_argument('--batch_size', type=int, default=10, help='minibatch size')
-	parser.add_argument('--save_checkpoint_every', type=int, default=50,
+	parser.add_argument('--start_epoch', type=int, default=0, help='starting epoch number (useful in restarts)')
+	parser.add_argument('--end_epoch', type=int, default=30, help='ending epoch number')
+	parser.add_argument('--batch_size', type=int, default=20, help='minibatch size')
+	parser.add_argument('--save_checkpoint_every', type=int, default=1,
 	                    help='how often to save a model checkpoint (in epoch)?')
-	parser.add_argument('--checkpoint_path', type=str, default='save', help='directory to store checkpointed models')
+	parser.add_argument('--checkpoint_path', type=str, default='./model_run_data',
+	                    help='directory to store checkpointed models')
 	parser.add_argument('--weight_decay', type=float, default=5e-4,
 	                    help='weight_decay. strength of weight regularization')
-	
-	parser.add_argument('--gpu', type=str, default='0', help='gpu device number')
-	parser.add_argument('--shuffle', type=bool, default=False, help="boolean indicating shuffle required or not")
+
+	parser.add_argument('--gpu', type=str, default='', help='gpu device number')
+	parser.add_argument('--resume', type=str, default='', help='path to latest checkpoint (*.pth)')
+	parser.add_argument('--shuffle', type=bool, default=True, help="boolean indicating shuffle required or not")
 	parser.add_argument('--train_dataset_path', type=str, default="data/train/train", help="train dataset path")
 	parser.add_argument('--num_workers', type=int, default=0, help="number of workers to load batch")
-	parser.add_argument('--train_annotation_path', type=str, default="data/training_annotation.json", help="path to training annotations")
+	parser.add_argument('--train_annotation_path', type=str, default="data/training_annotation.json",
+	                    help="path to training annotations")
 	parser.add_argument('--resolution', type=int, default=224, help="frame resolution")
 
 	args = parser.parse_args()
 
 	opts = vars(args)
-	os.environ['CUDA_VISIBLE_DEVICES'] = opts["gpu"]
+	opts["date"] = time.strftime("%Y-%m-%d %H:%M:%S")
 	opt_json = os.path.join(opts["checkpoint_path"], 'opt_info.json')
 	if not os.path.isdir(opts["checkpoint_path"]):
 		os.mkdir(opts["checkpoint_path"])
 
-	print(json.dumps(opts, indent=4))
+	logging.info(json.dumps(opts, indent=4))
+	logging.info(f'__Python VERSION: {sys.version}')
+	logging.info(f'__pyTorch VERSION: {torch.__version__}')
+	with open(opt_json, 'w') as fh:
+		json.dump(opts, fh, indent=4)
+
+	# https://discuss.pytorch.org/t/cuda-visible-devices-make-gpu-disappear/21439
+	os.environ['CUDA_VISIBLE_DEVICES'] = opts["gpu"]
+	if opts["gpu"]:
+		logging.info(f'__CUDNN VERSION: {torch.backends.cudnn.version()}')
+		logging.info(f'__Number CUDA Devices: {torch.cuda.device_count()}')
+		cuda_result = subprocess.call(
+			["nvidia-smi", "--format=csv",
+			 "--query-gpu=index,name,driver_version,memory.total,memory.used,memory.free"])
+		logging.info(f'Available devices {torch.cuda.device_count()}')
+		logging.info(f'Current CUDA Device: GPU {torch.cuda.current_device()}')
+		logging.info(f'Current CUDA Device Name: {torch.cuda.get_device_name(int(opts["gpu"]))}')
+
 	main(opts)
