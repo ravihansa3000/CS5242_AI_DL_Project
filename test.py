@@ -38,13 +38,11 @@ def test(dataloader, model):
 		logging.info(f'test generated on video {batch_idx + 1}...')
 
 	preds_df = pd.DataFrame(preds, columns=['object1', 'relationship', 'object2'])
-	preds_df.index = np.arange(1, len(preds_df) + 1)
 	preds_res = []
 	for pred in preds_df.stack():
 		preds_res.append(" ".join(map(str, pred)))
 	preds_res_df = pd.DataFrame(preds_res, columns=['label'])
 	preds_res_df.index.name = 'ID'
-	preds_res_df.index = np.arange(1, len(preds_res_df) + 1)
 	return preds_df, preds_res_df
 
 def main(opts):
