@@ -37,8 +37,9 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			model.train()
 
 			videos_tensor = videos_tensor.to(device)
-			annot = torch.LongTensor([[training_annotation[item][0], training_annotation[item][1] + 35, training_annotation[item][2]]
-									 for item in video_ids]).to(device)
+			annot = torch.LongTensor(
+				[[training_annotation[item][0], training_annotation[item][1] + 35, training_annotation[item][2]]
+				 for item in video_ids]).to(device)
 			output, _ = model(x=videos_tensor, target_variable=annot)
 
 			loss = loss_fns[0](output[:, 0, :], annot[:, 0]) + \
@@ -48,6 +49,11 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			loss.backward()
 			optimizer.step()
 			lr_scheduler.step()
+
+			lr_params = []
+			for param_group in optimizer.param_groups:
+				lr_params.append(param_group["lr"])
+			logging.info(f'lr_params: {lr_params}')
 			logging.info(f"Step update | batch_idx: {batch_idx}, step: {step}, loss: {loss.item()}")
 			step += 1
 
@@ -62,10 +68,12 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			}, filename=save_file_path)
 			logging.info(f"Model saved to {save_file_path}")
 
-			model_info_path = os.path.join(opts["checkpoint_path"], 'model_score.txt')
+			model_info_path = os.path.join(opts["checkpoint_path"], 'score.txt')
 			with open(model_info_path, 'a') as fh:
 				time_str = time.strftime("%Y-%m-%d %H:%M:%S")
 				fh.write(f"{time_str} | model update --- epoch: {epoch}, loss: {loss:.6f} \n\n")
+
+	logging.info("Training completed")
 
 
 def main(opts):
@@ -130,12 +138,12 @@ if __name__ == '__main__':
 	parser.add_argument('--dim_word', type=int, default=500,
 	                    help='the encoding size of each token in the vocabulary, and the video.')
 	parser.add_argument('--dim_vid', type=int, default=500, help='dim of features of video frames')
-	parser.add_argument('--learning_rate', type=float, default=4e-4, help='learning rate')
-	parser.add_argument('--learning_rate_decay_every', type=int, default=200,
+	parser.add_argument('--learning_rate', type=float, default=1e-3, help='learning rate')
+	parser.add_argument('--learning_rate_decay_every', type=int, default=60,
 	                    help='every how many iterations thereafter to drop LR?(in epoch)')
 	parser.add_argument('--learning_rate_decay_rate', type=float, default=0.8)
 	parser.add_argument('--start_epoch', type=int, default=0, help='starting epoch number (useful in restarts)')
-	parser.add_argument('--end_epoch', type=int, default=30, help='ending epoch number')
+	parser.add_argument('--end_epoch', type=int, default=12, help='ending epoch number')
 	parser.add_argument('--batch_size', type=int, default=20, help='minibatch size')
 	parser.add_argument('--save_checkpoint_every', type=int, default=1,
 	                    help='how often to save a model checkpoint (in epoch)?')
