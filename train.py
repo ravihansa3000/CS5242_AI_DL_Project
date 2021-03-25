@@ -40,8 +40,9 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			model.train()
 
 			videos_tensor = videos_tensor.to(device)
-			annots = torch.LongTensor([[training_annotation[item][0], training_annotation[item][1] + 35, training_annotation[item][2]]
-									 for item in video_ids]).to(device)
+			annots = torch.LongTensor(
+				[[training_annotation[item][0], training_annotation[item][1] + 35, training_annotation[item][2]]
+				 for item in video_ids]).to(device)
 			output, _ = model(x=videos_tensor, target_variable=annots)
 
 			loss = loss_fns[0](output[:, 0, :], annots[:, 0]) + \
@@ -51,6 +52,11 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			loss.backward()
 			optimizer.step()
 			lr_scheduler.step()
+
+			lr_params = []
+			for param_group in optimizer.param_groups:
+				lr_params.append(param_group["lr"])
+			logging.info(f'lr_params: {lr_params}')
 			logging.info(f"Step update | batch_idx: {batch_idx}, step: {step}, loss: {loss.item()}")
 
 			true_pos_per_step = 0
@@ -76,12 +82,14 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			}, filename=save_file_path)
 			logging.info(f"Model saved to {save_file_path}")
 
-			model_info_path = os.path.join(opts["checkpoint_path"], 'model_score.txt')
+			model_info_path = os.path.join(opts["checkpoint_path"], 'score.txt')
 			with open(model_info_path, 'a') as fh:
 				time_str = time.strftime("%Y-%m-%d %H:%M:%S")
 				fh.write(f"{time_str} | model update --- epoch: {epoch}, loss: {loss:.6f} \n\n")
 	
+	logging.info("Training completed")
 	return model
+
 
 def main(opts):
 	model = model_provider(opts)
