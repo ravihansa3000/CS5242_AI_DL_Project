@@ -6,12 +6,13 @@ from torch.utils.data import Dataset
 
 class VRDataset(Dataset):
 
-	def __init__(self, img_root, transform=None):
+	def __init__(self, img_root, len, transform=None):
 		self.root_dir = img_root
+		self.len = len
 		self.transform = transform
 
 	def __len__(self):
-		return 447  # temoporarily hardcoded.
+		return self.len
 
 	def __getitem__(self, idx):
 		dir_name = str(idx)
