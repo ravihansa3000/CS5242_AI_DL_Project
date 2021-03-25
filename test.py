@@ -35,6 +35,8 @@ def test(dataloader, model):
 			_, indices = torch.topk(output, k=5, dim=1)
 			preds.append(indices.tolist())
 
+		logging.info(f'test generated on video {batch_idx + 1}...')
+
 	preds_df = pd.DataFrame(preds, columns=['object1', 'relationship', 'object2'])
 	preds_df.index = np.arange(1, len(preds_df) + 1)
 	preds_res = []
@@ -56,7 +58,7 @@ def main(opts):
 		_, preds_res_df = test(dataloader, model)
 		preds_res_df.to_csv('preds.csv', index_label="ID")
 	else:
-		logging.info(f'no trained model found at {opts["trained_model"]}')   
+		logging.info(f'no trained model found at {opts["trained_model"]}')  
 
 if __name__ == '__main__':
 	opts = vars(model_options())
