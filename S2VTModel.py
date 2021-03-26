@@ -44,7 +44,7 @@ class S2VTModel(nn.Module):
 		self.rnn2 = self.rnn_cell(self.dim_hidden + self.dim_word, self.dim_hidden, n_layers,
 		                          batch_first=True, dropout=rnn_dropout_p).to(device)
 
-		self.out = [nn.Linear(self.dim_hidden, 35), nn.Linear(self.dim_hidden, 82), nn.Linear(self.dim_hidden, 35)]
+		self.out = [nn.Linear(self.dim_hidden, 35).to(device), nn.Linear(self.dim_hidden, 82).to(device), nn.Linear(self.dim_hidden, 35).to(device)]
 
 	def forward(self, x: torch.Tensor, target_variable=None, opts=None):
 		"""

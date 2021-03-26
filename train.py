@@ -58,16 +58,18 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			logging.info(f"Step update | batch_idx: {batch_idx}, step: {step}, loss: {loss.item()}")
 
 			true_pos_per_step = 0
-			total_per_step = len(annots)
+			total_per_step = batch_size
 			preds = torch.stack([torch.argmax(op, dim=1) for op in output], dim=1)
 			for (pred, annot) in zip(preds, annots):
 				true_pos_per_step += int((pred == annot).sum())
 			true_pos += true_pos_per_step
 			total += total_per_step
-			print(f'Accuracy at step {step}: ', true_pos_per_step / total_per_step * 100)
+			step_acc = true_pos_per_step / total_per_step * 100
+			logging.info(f'Accuracy at step {step}: {step_acc}')
 
 			step += 1
-		print(f'Accuracy at epoch {epoch}: ', true_pos / total * 100)
+		epoch_acc = true_pos / total * 100
+		logging.info(f'Accuracy at epoch {epoch}: {epoch_acc}')
 			
 		logging.info(f"Epoch update | epoch: {epoch}, loss: {loss.item()}")
 
