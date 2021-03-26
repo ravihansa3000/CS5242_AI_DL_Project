@@ -14,9 +14,8 @@ class EncoderCNN(nn.Module):
 		for param in self.resnet.parameters():
 			param.requires_grad = False
 		self.resnet.fc = nn.Linear(2048, output_feature_dims)
-		self.activation_fn = nn.ReLU()
 
 	def forward(self, images):
 		"""Extract feature vectors from input images."""
 		images = images.to(device)
-		return self.activation_fn(self.resnet(images))
+		return self.resnet(images)
