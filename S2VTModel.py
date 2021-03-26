@@ -44,7 +44,7 @@ class S2VTModel(nn.Module):
 		self.rnn2 = self.rnn_cell(self.dim_hidden + self.dim_word, self.dim_hidden, n_layers,
 		                          batch_first=True, dropout=rnn_dropout_p).to(device)
 
-		self.out = nn.Linear(self.dim_hidden, self.dim_output)
+		self.out = [nn.Linear(self.dim_hidden, 35), nn.Linear(self.dim_hidden, 82), nn.Linear(self.dim_hidden, 35)]
 
 	def forward(self, x: torch.Tensor, target_variable=None, opts=None):
 		"""
@@ -115,11 +115,8 @@ class S2VTModel(nn.Module):
 				output2, state2 = self.rnn2(input2, state2)  # output2: (batch_size, i, dim_word)
 
 				# feed RNN output to linear layer and get probabilities for each classification
-				logits = self.out(output2.squeeze(1))  # logits: (batch_size, dim_output)
-				seq_probs.append(logits.unsqueeze(1))  # seq_probs: (batch_size, 1, dim_output)
-
-			seq_probs = torch.stack(seq_probs, 1)  # seq_probs: (batch_size, 3, dim_output)
-
+				logits = self.out[i](output2.squeeze(1))  # logits: (batch_size, dim_output)
+				seq_probs.append(logits)  # seq_probs: (batch_size, 1, dim_output)
 		else:
 			current_words = self.embedding(Variable(torch.LongTensor([self.sos_id] * batch_size)).to(device))
 			for i in range(self.max_length - 1):
@@ -130,7 +127,7 @@ class S2VTModel(nn.Module):
 				output1, state1 = self.rnn1(padding_frames, state1)  # output1: (batch_size, 1, dim_vid)
 				input2 = torch.cat((output1, current_words.unsqueeze(1)), dim=2)
 				output2, state2 = self.rnn2(input2, state2)  # output2: (batch_size, 1, dim_word)
-				logits = self.out(output2.squeeze(1))  # logits: (batch_size, dim_output)
+				logits = self.out[i](output2.squeeze(1))  # logits: (batch_size, dim_output)
 				logits = F.log_softmax(logits, dim=1)
 				seq_probs.append(logits.unsqueeze(1))  # seq_probs: (batch_size, 1, dim_output)
 
@@ -142,4 +139,4 @@ class S2VTModel(nn.Module):
 			seq_probs = torch.stack(seq_probs, 1)  # seq_probs: (batch_size, 3, dim_output)
 			seq_preds = torch.stack(seq_preds, 1)  # seq_probs: (batch_size, 3, 1)
 
-		return seq_probs.squeeze(), seq_preds
+		return seq_probs, seq_preds
