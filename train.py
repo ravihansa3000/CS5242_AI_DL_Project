@@ -58,7 +58,7 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			logging.info(f"Step update | batch_idx: {batch_idx}, step: {step}, loss: {loss.item()}")
 
 			true_pos_per_step = 0
-			total_per_step = batch_size
+			total_per_step = opts["batch_size"]
 			preds = torch.stack([torch.argmax(op, dim=1) for op in output], dim=1)
 			for (pred, annot) in zip(preds, annots):
 				true_pos_per_step += int((pred == annot).sum())
