@@ -61,7 +61,8 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			total_per_step = opts["batch_size"]
 			preds = torch.stack([torch.argmax(op, dim=1) for op in output], dim=1)
 			for (pred, annot) in zip(preds, annots):
-				true_pos_per_step += int((pred == annot).sum())
+				if torch.equal(pred, annot):
+					true_pos_per_step += 1
 			true_pos += true_pos_per_step
 			total += total_per_step
 			step_acc = true_pos_per_step / total_per_step * 100
