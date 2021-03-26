@@ -33,6 +33,7 @@ def test(dataloader, model):
 		with torch.no_grad():
 			output, _ = model(x=videos_tensor)
 			_, indices = torch.topk(output, k=5, dim=1)
+			indices[1] -= 35
 			preds.append(indices.tolist())
 
 		logging.info(f'test generated on video {batch_idx + 1}...')
