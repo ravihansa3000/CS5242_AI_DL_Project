@@ -47,8 +47,7 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			loss = loss_fns[0](output[0], annots[:, 0]) + \
 			       loss_fns[1](output[1], annots[:, 1]) + \
 			       loss_fns[2](output[2], annots[:, 2])
-			output = [torch.nn.functional.log_softmax(op, dim=1) for op in output]
-			logging.info(f"output0: {output[0]}")
+
 			loss.backward()
 			optimizer.step()
 			lr_scheduler.step()
@@ -59,16 +58,19 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			logging.info(f'lr_params: {lr_params}')
 			logging.info(f"Step update | batch_idx: {batch_idx}, step: {step}, loss: {loss.item()}")
 
-			true_pos_per_step = 0
-			total_per_step = opts["batch_size"]
-			preds = torch.stack([torch.argmax(op, dim=1) for op in output], dim=1)
-			for (pred, annot) in zip(preds, annots):
-				if torch.equal(pred, annot):
-					true_pos_per_step += 1
-			true_pos += true_pos_per_step
-			total += total_per_step
-			step_acc = true_pos_per_step / total_per_step * 100
-			logging.info(f'Accuracy at step {step}: {step_acc}')
+			with torch.no_grad():
+				preds = [torch.nn.functional.log_softmax(op, dim=1) for op in output]
+				logging.info(f"output0: {output[0]}")
+				true_pos_per_step = 0
+				total_per_step = opts["batch_size"]
+				preds = torch.stack([torch.argmax(pred, dim=1) for pred in preds], dim=1)
+				for (pred, annot) in zip(preds, annots):
+					if torch.equal(pred, annot):
+						true_pos_per_step += 1
+				true_pos += true_pos_per_step
+				total += total_per_step
+				step_acc = true_pos_per_step / total_per_step * 100
+				logging.info(f'Accuracy at step {step}: {step_acc}')
 
 			step += 1
 		epoch_acc = true_pos / total * 100
