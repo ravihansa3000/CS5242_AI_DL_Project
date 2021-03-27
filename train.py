@@ -60,11 +60,11 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 
 			with torch.no_grad():
 				preds = [torch.nn.functional.log_softmax(op, dim=1) for op in output]
-				logging.info(f"output0: {output[0]}")
 				true_pos_per_step = 0
 				total_per_step = opts["batch_size"]
 				preds = torch.stack([torch.argmax(pred, dim=1) for pred in preds], dim=1)
 				for (pred, annot) in zip(preds, annots):
+					logging.info(f"{pred}, {annot}")
 					if torch.equal(pred, annot):
 						true_pos_per_step += 1
 				true_pos += true_pos_per_step
