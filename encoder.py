@@ -9,11 +9,11 @@ class EncoderCNN(nn.Module):
 	def __init__(self, output_feature_dims=500):
 		"""Load the pretrained ResNet-50 and replace top fc layer."""
 		super(EncoderCNN, self).__init__()
-		self.resnet = models.resnet50(pretrained=True).to(device)
+		self.resnet = models.resnet18(pretrained=True).to(device)
 		# no need to train parameters
 		for param in self.resnet.parameters():
 			param.requires_grad = False
-		self.resnet.fc = nn.Linear(2048, output_feature_dims)
+		self.resnet.fc = nn.Linear(512, output_feature_dims)
 
 	def forward(self, images):
 		"""Extract feature vectors from input images."""
