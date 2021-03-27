@@ -49,6 +49,7 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			       loss_fns[2](output[2], annots[:, 2])
 
 			loss.backward()
+			torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
 			optimizer.step()
 			lr_scheduler.step()
 
