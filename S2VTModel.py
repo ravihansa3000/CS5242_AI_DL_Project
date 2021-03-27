@@ -46,7 +46,7 @@ class S2VTModel(nn.Module):
 
 		self.out = [nn.Linear(self.dim_hidden, 35).to(device), nn.Linear(self.dim_hidden, 82).to(device), nn.Linear(self.dim_hidden, 35).to(device)]
 
-	def forward(self, x: torch.Tensor, target_variable=None, opts=None):
+	def forward(self, logging, x: torch.Tensor, target_variable=None, opts=None):
 		"""
 		:param x: Tensor containing video features of shape (batch_size, n_frames, cnn_input_c, cnn_input_h, cnn_input_w)
 			n_frames is the number of video frames
@@ -102,7 +102,8 @@ class S2VTModel(nn.Module):
 			for i in range(self.max_length - 1):
 				# generate word embeddings using the i-th column (batch_size * 1)
 				current_words = self.embedding(target_variable[:, i])
-
+				if i == 0:
+					logging.info(f"sos embedding: {current_words}")
 				# optimize for GPU (applicable only when CUDA/GPU capability is present in the system)
 				self.rnn1.flatten_parameters()
 				self.rnn2.flatten_parameters()

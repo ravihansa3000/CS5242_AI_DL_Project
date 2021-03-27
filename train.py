@@ -42,12 +42,13 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 
 			annots = torch.LongTensor([[training_annotation[item][0], training_annotation[item][1] + 35, training_annotation[item][2]]
 							 			for item in video_ids]).to(device)
-			output, _ = model(x=videos_tensor, target_variable=annots)
+			output, _ = model(logging, x=videos_tensor, target_variable=annots)
 			annots[:, 1] = torch.sub(annots[:, 1], 35)
 			loss = loss_fns[0](output[0], annots[:, 0]) + \
 			       loss_fns[1](output[1], annots[:, 1]) + \
 			       loss_fns[2](output[2], annots[:, 2])
-
+			output = [torch.nn.functional.log_softmax(op, dim=1) for op in output]
+			logging.info(f"output0: {output[0]}")
 			loss.backward()
 			optimizer.step()
 			lr_scheduler.step()
@@ -62,7 +63,6 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			total_per_step = opts["batch_size"]
 			preds = torch.stack([torch.argmax(op, dim=1) for op in output], dim=1)
 			for (pred, annot) in zip(preds, annots):
-				logging.info(f"{pred}, {annot}")
 				if torch.equal(pred, annot):
 					true_pos_per_step += 1
 			true_pos += true_pos_per_step
