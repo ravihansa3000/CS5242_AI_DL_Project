@@ -109,7 +109,6 @@ class S2VTModel(nn.Module):
 
 				# input frame paddings to 1st layer for the last 3 time steps
 				output1, state1 = self.rnn1(padding_frames, state1)  # output1: (batch_size, i, dim_vid)
-
 				# concatenate word embeddings with output from the 1st layer
 				input2 = torch.cat((output1, current_words.unsqueeze(1)), dim=2)  # input2: (batch_size, i, dim_word)
 				output2, state2 = self.rnn2(input2, state2)  # output2: (batch_size, i, dim_word)
