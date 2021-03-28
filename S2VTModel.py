@@ -44,7 +44,10 @@ class S2VTModel(nn.Module):
 		self.rnn2 = self.rnn_cell(self.dim_hidden + self.dim_word, self.dim_hidden, n_layers,
 		                          batch_first=True, dropout=rnn_dropout_p).to(device)
 
-		self.out = [nn.Linear(self.dim_hidden, 35).to(device), nn.Linear(self.dim_hidden, 82).to(device), nn.Linear(self.dim_hidden, 35).to(device)]
+		self.out = nn.ModuleList([ \
+			nn.Linear(self.dim_hidden, 35).to(device), \
+			nn.Linear(self.dim_hidden, 82).to(device), \
+			nn.Linear(self.dim_hidden, 35).to(device)])
 
 	def forward(self, logging, x: torch.Tensor, target_variable=None, opts=None):
 		"""
@@ -127,14 +130,14 @@ class S2VTModel(nn.Module):
 				output2, state2 = self.rnn2(input2, state2)  # output2: (batch_size, 1, dim_word)
 				logits = self.out[i](output2.squeeze(1))  # logits: (batch_size, dim_output)
 				logits = F.log_softmax(logits, dim=1)
-				seq_probs.append(logits.unsqueeze(1))  # seq_probs: (batch_size, 1, dim_output)
+				seq_probs.append(logits)  # seq_probs: (batch_size, 1, dim_output)
 
 				# get word embeddings for the next step using the indices of best predictions in the prev step
-				_, preds = torch.max(logits, 1)  # preds: (batch_size, 1)
+				preds = torch.argmax(logits, dim=1)  # preds: (batch_size, 1)
+				preds = torch.LongTensor(preds)
 				current_words = self.embedding(preds)
 				seq_preds.append(preds.unsqueeze(1))  # seq_preds: (batch_size, 1, 1)
 
-			seq_probs = torch.stack(seq_probs, 1)  # seq_probs: (batch_size, 3, dim_output)
 			seq_preds = torch.stack(seq_preds, 1)  # seq_probs: (batch_size, 3, 1)
 
 		return seq_probs, seq_preds
