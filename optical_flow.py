@@ -113,7 +113,7 @@ class LucasKanadeOpticalFlow(IOpticalFlow):
         return img
 
 
-def CreateOpticalFlow(type):
+def optical_flow_provider(type):
     '''Optical flow showcase factory, call by type as shown below'''
     def dense_by_hsv():
         return DenseOpticalFlowByHSV()
