@@ -9,7 +9,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def model_options():
 	parser = argparse.ArgumentParser()
-	parser.add_argument("--model", type=str, default='S2VTModel', help="with model to use")
+	parser.add_argument('--model', type=str, default='S2VTModel', help="with model to use")
 	parser.add_argument('--trained_model', type=str, default='trained_model.pth', help="load trained model for testing")
 	parser.add_argument("--max_len", type=int, default=4, help='max length of captions(containing <sos>)')
 	parser.add_argument('--dim_hidden', type=int, default=500, help='size of the rnn hidden layer')
@@ -46,6 +46,8 @@ def model_options():
 	parser.add_argument('--train_annotation_path', type=str, default="data/training_annotation.json",
 						help="path to training annotations")
 	parser.add_argument('--resolution', type=int, default=224, help="frame resolution")
+	parser.add_argument('--optical_flow_type', type=str, default='dense_lines', help='dense_hsv/dense_lines/dense_warp/lucas_kanade')
+	parser.add_argument('--optical_flow_dataset_path', type=str, default="data/train/optical_flow", help="train dataset path for optical flow feature")
 	return parser.parse_args()
 
 def model_provider(opts):
