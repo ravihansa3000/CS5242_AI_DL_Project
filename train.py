@@ -112,7 +112,7 @@ def main(opts):
 	optimizer = optim.Adam(model.parameters(), lr=opts["learning_rate"], weight_decay=opts["weight_decay"])
 	exp_lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=opts["learning_rate_decay_every"],
 	                                             gamma=opts["learning_rate_decay_rate"])
-	vrdataset = VRDataset(img_root=opts["train_dataset_path"], len=447, transform=data_transformations(opts))
+	vrdataset = VRDataset(img_root=opts["train_dataset_path"], len=447, transform=data_transformations(opts, mode='train'))
 	dataloader = DataLoader(vrdataset, batch_size=opts["batch_size"], shuffle=opts["shuffle"],
 	                        num_workers=opts["num_workers"])
 	train(dataloader, model, optimizer, exp_lr_scheduler, opts)

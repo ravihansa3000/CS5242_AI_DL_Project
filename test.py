@@ -51,7 +51,7 @@ def test(dataloader, model):
 
 def main(opts):
 	model = model_provider(opts)
-	vrdataset = VRDataset(img_root=opts["test_dataset_path"], len=119, transform=data_transformations(opts))
+	vrdataset = VRDataset(img_root=opts["test_dataset_path"], len=119, transform=data_transformations(opts, mode='test'))
 	dataloader = DataLoader(vrdataset, batch_size=1, shuffle=False, num_workers=opts["num_workers"])
 	if os.path.isfile(opts["trained_model"]):
 		logging.info(f'loading trained model {opts["trained_model"]}')

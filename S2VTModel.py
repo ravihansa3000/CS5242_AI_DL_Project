@@ -135,7 +135,7 @@ class S2VTModel(nn.Module):
 				# get word embeddings for the next step using the indices of best predictions in the prev step
 				preds = torch.argmax(logits, dim=1)  # preds: (batch_size, 1)
 				preds = torch.LongTensor(preds)
-				current_words = self.embedding(preds)
+				current_words = self.embedding(torch.add(preds, 35) if i == 1 else preds)
 				seq_preds.append(preds.unsqueeze(1))  # seq_preds: (batch_size, 1, 1)
 
 			seq_preds = torch.stack(seq_preds, 1)  # seq_probs: (batch_size, 3, 1)
