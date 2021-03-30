@@ -1,3 +1,4 @@
+import os
 import cv2
 
 from optical_flow import *
@@ -5,30 +6,33 @@ from model_config import model_options
 from dataset import ImageDataset
 from torch.utils.data import DataLoader
 
-def image_name(idx):
+def padded_digit(idx):
 	idx = str(idx)
 	while len(idx) < 6:
 		idx = "0" + idx
-	return idx + ".jpg"
-
-def transform_video_frame(video_frame):
-	return video_frame.squeeze().numpy()
+	return idx
 
 def main(opts):
 	imageDataset = ImageDataset(img_root=opts["train_dataset_path"], len=119)
 	dataloader = DataLoader(imageDataset, batch_size=1, num_workers=opts["num_workers"])
 
 	for batch_idx, (video_ids, video_frames) in enumerate(dataloader):
-		op_flow = optical_flow_provider('lucas_kanade')
-		op_flow.set1stFrame(transform_video_frame(video_frames[0]))
+		video_folder_path = os.path.join(opts["optical_flow_dataset_path"], opts['optical_flow_type'], video_ids[0])
+		if not os.path.isdir(video_folder_path):
+			os.mkdir(video_folder_path)
+		op_flow = OpticalFlowProvider(opts['optical_flow_type'])
+		op_flow.set1stFrame(video_frames[0].squeeze().numpy())
+		for frame_idx in range(len(video_frames)):
+			video_frame = video_frames[frame_idx].squeeze().numpy()
+			op_flow_img = op_flow.apply(video_frame)
+			op_flow.set1stFrame(video_frame)
+			cv2.imwrite(os.path.join(video_folder_path, padded_digit(frame_idx + 1) + '.jpg'), op_flow_img)
 
-		for frame_idx in range(len(video_frames) - 1):
-			processed_img = op_flow.apply(transform_video_frame(video_frames[frame_idx + 1]))
-			op_flow.set1stFrame(transform_video_frame(video_frames[frame_idx + 1]))
-			cv2.imwrite(image_name(frame_idx), processed_img)
-			
-		return
 
 if __name__ == '__main__':
 	opts = vars(model_options())
+	if not os.path.isdir(opts["optical_flow_dataset_path"]):
+		os.mkdir(opts["optical_flow_dataset_path"])
+	if not os.path.isdir(os.path.join(opts["optical_flow_dataset_path"], opts['optical_flow_type'])):
+		os.mkdir(os.path.join(opts["optical_flow_dataset_path"], opts['optical_flow_type']))
 	main(opts)
