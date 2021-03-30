@@ -7,15 +7,14 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class EncoderCNN(nn.Module):
 	def __init__(self, output_feature_dims=500):
-		"""Load the pretrained ResNet-50 and replace top fc layer."""
+		"""Load the pretrained VGG-11 and replace top fc layer."""
 		super(EncoderCNN, self).__init__()
-		self.resnet = models.resnet18(pretrained=True).to(device)
-		# no need to train parameters
-		for param in self.resnet.parameters():
+		self.vgg11 = models.vgg11(pretrained=True).to(device)
+		for param in self.vgg11.parameters():
 			param.requires_grad = False
-		self.resnet.fc = nn.Linear(512, output_feature_dims)
+		self.vgg11.classifier = nn.Linear(25088, output_feature_dims)
 
 	def forward(self, images):
 		"""Extract feature vectors from input images."""
 		images = images.to(device)
-		return self.resnet(images)
+		return self.vgg11(images)
