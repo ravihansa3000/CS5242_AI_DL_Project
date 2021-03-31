@@ -18,7 +18,7 @@ def main(opts):
 
 	for batch_idx, (video_ids, video_frames) in enumerate(dataloader):
 		video_folder_path = os.path.join(opts["optical_flow_dataset_path"], opts['optical_flow_type'], video_ids[0])
-		# skip unneeded the optical flow feature generation
+		# skip optical flow feature generation
 		if os.path.isdir(video_folder_path): 
 			if len(os.listdir(video_folder_path)) == len(video_frames):
 				continue
