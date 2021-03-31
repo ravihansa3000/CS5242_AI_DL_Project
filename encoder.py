@@ -45,5 +45,4 @@ class Encoder(nn.Module):
 
 		state = None
 		output, _ = self.rnn(rnn_input, state) # batch_size, 33, 2 * dim_hidden
-		logging.info(f"encoder output: {output.shape}")
 		return output

@@ -65,7 +65,6 @@ class S2VTModel(nn.Module):
 
 		input1 = x[:, :30, :]
 		input2 = x[:, 30:, :]
-		logging.info(f"input1, input2: {input1.shape}, {input2.shape}")
 		# https://github.com/pytorch/pytorch/issues/3920
 		# paddings to be used for the 2nd layer
 		padding_words = Variable(
@@ -97,7 +96,6 @@ class S2VTModel(nn.Module):
 				output1, state1 = self.rnn(input1, state1)
 
 				logits = self.out[i](output1.squeeze(1))
-				logging.info(f"logits: {logits.shape}")
 				seq_probs.append(logits)
 		else:
 			current_words = self.embedding(Variable(torch.LongTensor([self.sos_id] * batch_size)).to(device))
