@@ -6,7 +6,6 @@ import subprocess
 import logging
 
 import numpy as np
-import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 import torch.optim as optim
@@ -40,16 +39,17 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			model.train()
 
 			videos_tensor = videos_tensor.to(device)
-			annots = torch.LongTensor(
-				[[training_annotation[item][0], training_annotation[item][1] + 35, training_annotation[item][2]]
-				 for item in video_ids]).to(device)
-			output, _ = model(x=videos_tensor, target_variable=annots)
 
-			loss = loss_fns[0](output[:, 0, :], annots[:, 0]) + \
-			       loss_fns[1](output[:, 1, :], annots[:, 1]) + \
-			       loss_fns[2](output[:, 2, :], annots[:, 2])
+			annots = torch.LongTensor([[training_annotation[item][0], training_annotation[item][1] + 35, training_annotation[item][2]]
+							 			for item in video_ids]).to(device)
+			output, _ = model(logging, x=videos_tensor, target_variable=annots)
+			annots[:, 1] = torch.sub(annots[:, 1], 35)
+			loss = loss_fns[0](output[0], annots[:, 0]) + \
+			       loss_fns[1](output[1], annots[:, 1]) + \
+			       loss_fns[2](output[2], annots[:, 2])
 
 			loss.backward()
+			torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
 			optimizer.step()
 			lr_scheduler.step()
 
@@ -59,17 +59,23 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			logging.info(f'lr_params: {lr_params}')
 			logging.info(f"Step update | batch_idx: {batch_idx}, step: {step}, loss: {loss.item()}")
 
-			true_pos_per_step = 0
-			total_per_step = len(annots) * 3
-			preds = torch.max(output, dim=2)
-			for (pred, annot) in zip(preds, annots):
-				true_pos_per_step += int((pred == annot).sum())
-			true_pos += true_pos_per_step
-			total += total_per_step
-			print(f'Accuracy at step {step}: ', true_pos_per_step / total_per_step * 100)
+			with torch.no_grad():
+				preds = [torch.nn.functional.log_softmax(op, dim=1) for op in output]
+				true_pos_per_step = 0
+				total_per_step = opts["batch_size"]
+				preds = torch.stack([torch.argmax(pred, dim=1) for pred in preds], dim=1)
+				for (pred, annot) in zip(preds, annots):
+					logging.info(f"{pred}, {annot}")
+					if torch.equal(pred, annot):
+						true_pos_per_step += 1
+				true_pos += true_pos_per_step
+				total += total_per_step
+				step_acc = true_pos_per_step / total_per_step * 100
+				logging.info(f'Accuracy at step {step}: {step_acc}')
 
 			step += 1
-		print(f'Accuracy at epoch {epoch}: ', true_pos / total * 100)
+		epoch_acc = true_pos / total * 100
+		logging.info(f'Accuracy at epoch {epoch}: {epoch_acc}')
 			
 		logging.info(f"Epoch update | epoch: {epoch}, loss: {loss.item()}")
 
@@ -102,11 +108,11 @@ def main(opts):
 			logging.info(f'loaded checkpoint {opts["resume"]}')
 		else:
 			logging.info(f'no checkpoint found at {opts["resume"]}')
-
+	logging.info(model)
 	optimizer = optim.Adam(model.parameters(), lr=opts["learning_rate"], weight_decay=opts["weight_decay"])
 	exp_lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=opts["learning_rate_decay_every"],
 	                                             gamma=opts["learning_rate_decay_rate"])
-	vrdataset = VRDataset(img_root=opts["train_dataset_path"], len=447, transform=data_transformations(opts))
+	vrdataset = VRDataset(img_root=opts["train_dataset_path"], len=447, transform=data_transformations(opts, mode='train'))
 	dataloader = DataLoader(vrdataset, batch_size=opts["batch_size"], shuffle=opts["shuffle"],
 	                        num_workers=opts["num_workers"])
 	train(dataloader, model, optimizer, exp_lr_scheduler, opts)

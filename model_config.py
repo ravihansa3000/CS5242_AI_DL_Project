@@ -4,7 +4,7 @@ import torch
 from torchvision import transforms
 
 from S2VTModel import S2VTModel
-
+from custom_transformations import AddGaussianNoise
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def model_options():
@@ -64,9 +64,19 @@ def model_provider(opts):
 			rnn_dropout_p=opts["rnn_dropout_p"]).to(device)
 	return model
 
-def data_transformations(opts):
-	return transforms.Compose([
-		transforms.Resize((opts["resolution"], opts["resolution"])),
-		transforms.ToTensor(),
-		transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-	])
+def data_transformations(opts, mode):
+	if mode == 'train':
+		return transforms.Compose([
+			transforms.Resize(opts["resolution"]),
+			transforms.RandomCrop(opts["resolution"]),
+			transforms.ToTensor(),
+			transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+			AddGaussianNoise(0., 1., p=0.4)
+		])
+	else:
+		return transforms.Compose([
+			transforms.Resize(opts["resolution"]),
+			transforms.CenterCrop(opts["resolution"]),
+			transforms.ToTensor(),
+			transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+		])
