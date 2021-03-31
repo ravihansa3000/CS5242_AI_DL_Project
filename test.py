@@ -32,13 +32,9 @@ def test(dataloader, model):
 		videos_tensor = videos_tensor.to(device)
 		with torch.no_grad():
 			output, _ = model(logging, x=videos_tensor)
-
-			# logging.info(f"{output[0].shape}, {output[1].shape}, {output[2].shape}")
-			# logging.info(f"output: {output}")
 			for op in output:
 				_, indices = torch.topk(op, k=5, dim=1)
 				preds.append(indices.flatten().tolist())
-				# logging.info(f"preds: {indices}")
 		logging.info(f'test generated on video {video_ids}...')
 
 	# preds_df = pd.DataFrame(preds, columns=['object1', 'relationship', 'object2'])

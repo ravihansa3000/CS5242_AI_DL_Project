@@ -108,7 +108,7 @@ def main(opts):
 			logging.info(f'loaded checkpoint {opts["resume"]}')
 		else:
 			logging.info(f'no checkpoint found at {opts["resume"]}')
-
+	logging.info(model)
 	optimizer = optim.Adam(model.parameters(), lr=opts["learning_rate"], weight_decay=opts["weight_decay"])
 	exp_lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=opts["learning_rate_decay_every"],
 	                                             gamma=opts["learning_rate_decay_rate"])
