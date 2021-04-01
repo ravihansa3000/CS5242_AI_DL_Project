@@ -1,33 +1,53 @@
+import logging
+
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 from torch.autograd import Variable
-from encoder import EncoderCNN
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+logging.basicConfig(
+	format='%(asctime)s %(levelname)-8s %(message)s',
+	level=logging.INFO,
+	datefmt='%Y-%m-%d %H:%M:%S')
+
+
+def init_hidden(batch_size, n_units):
+	"""
+	the weights are of the form (batch_size, n_units)
+	note that batch_first=True does not affect the shape of hidden states
+	:param batch_size:
+	:param n_layers:
+	:param n_units:
+	:return:
+	"""
+	hidden_a = torch.randn(batch_size, n_units)
+	hidden_b = torch.randn(batch_size, n_units)
+
+	hidden_a = Variable(hidden_a).to(device)
+	hidden_b = Variable(hidden_b).to(device)
+
+	return hidden_a, hidden_b
 
 
 class S2VTModel(nn.Module):
-	def __init__(self, vocab_size=117, dim_hidden=500, dim_word=500, max_len=4, dim_vid=500, sos_id=117,
-	             n_layers=1, rnn_cell='lstm', rnn_dropout_p=0.2, cnn_output_feature_dims=500):
+	def __init__(self, vocab_size=117 + 1, dim_hidden=200, dim_word=200, max_len=3, dim_vid=500, sos_id=117,
+	             rnn_cell='lstm'):
 		super(S2VTModel, self).__init__()
 		if rnn_cell.lower() == 'lstm':
-			self.rnn_cell = nn.LSTM
+			self.rnn_cell = nn.LSTMCell
 		elif rnn_cell.lower() == 'gru':
-			self.rnn_cell = nn.GRU
-
-		# initialize the encoder cnn
-		self.encoder = EncoderCNN(output_feature_dims=cnn_output_feature_dims).to(device)
+			self.rnn_cell = nn.GRUCell
 
 		# features of video frames are embedded to a 500 dimensional space
 		self.dim_vid = dim_vid
-
-		# object vocab: 35 + relationships vocab: 82
-		self.dim_output = vocab_size
 		self.dim_hidden = dim_hidden
 
 		# words are transformed to 500 feature dimension
 		self.dim_word = dim_word
+
+		# annotation vocabulary size + <sos>
+		self.vocab_size = vocab_size
 
 		# annotation attributes: <sos>, object1, relationship
 		# object2 is only predicted at the end
@@ -36,110 +56,108 @@ class S2VTModel(nn.Module):
 		# start-of-sentence and end-of-sentence ids
 		self.sos_id = sos_id
 
-		# word embeddings lookup table with; + 1 for <sos>
-		self.embedding = nn.Embedding(self.dim_output + 1, self.dim_word)
+		# word embeddings lookup tables for each element; object1, relationship, object2, <sos>
+		self.embedding = nn.Embedding(self.vocab_size, self.dim_word).to(device)
 
-		self.rnn1 = self.rnn_cell(self.dim_vid, self.dim_hidden, n_layers,
-		                          batch_first=True, dropout=rnn_dropout_p).to(device)
-		self.rnn2 = self.rnn_cell(self.dim_hidden + self.dim_word, self.dim_hidden, n_layers,
-		                          batch_first=True, dropout=rnn_dropout_p).to(device)
+		self.rnn1 = self.rnn_cell(self.dim_vid, self.dim_hidden).to(device)
+		self.rnn2 = self.rnn_cell(self.dim_hidden + self.dim_word, self.dim_hidden).to(device)
 
-		self.out = nn.Linear(self.dim_hidden, self.dim_output)
+		# final linear layer to decode the words
+		self.linear_layers = [nn.Linear(self.dim_hidden, C).to(device) for C in [35, 82, 35]]
 
-	def forward(self, x: torch.Tensor, target_variable=None, opts=None):
+		self.state1 = None
+		self.state2 = None
+
+	def forward(self, vid_feats: torch.Tensor, target_variable=None, tf_mode=True, top_k=5):
 		"""
-		:param x: Tensor containing video features of shape (batch_size, n_frames, cnn_input_c, cnn_input_h, cnn_input_w)
-			n_frames is the number of video frames
+		:param vid_feats: tensor containing encoded features of shape: (batch_size, n_frames, dim_vid)
 
-		:param target_variable: target labels of the ground truth annotations of shape (batch_size, max_length - 1)
-			Each row corresponds to a set of training annotations; (object1, relationship, object2)
+		:param target_variable: target labels of the ground truth annotations of shape (batch_size, max_length)
+			Each row corresponds to a set of training annotations; (<sos>, object1, relationship, object2)
 
-		:param opts: not used
+		:param tf_mode: teacher forcing mode
+			True: ground truth labels are used as input to the 2nd layer of RNN
+			False: only predictions are used as input
 
 		:return:
 		"""
-
-		vid_imgs_encoded = []
-		for i in range(x.shape[0]):
-			vid_imgs_encoded.append(self.encoder(x[i]))
-
-		vid_feats = torch.stack(vid_imgs_encoded, dim=0)  # vid_feats: (batch_size, n_frames, dim_vid)
 
 		batch_size, n_frames, _ = vid_feats.shape
 
 		# https://github.com/pytorch/pytorch/issues/3920
 		# paddings to be used for the 2nd layer
-		padding_words = Variable(
-			torch.empty(batch_size, n_frames, self.dim_word, dtype=vid_feats.dtype)).zero_().to(device)
+		padding_words = Variable(torch.empty(batch_size, self.dim_word, dtype=vid_feats.dtype)).zero_().to(device)
 
 		# paddings to be used for the 1st layer, added one by one in loop; shape of (batch_size * 1)
-		padding_frames = Variable(
-			torch.empty(batch_size, 1, self.dim_vid, dtype=vid_feats.dtype)).zero_().to(device)
+		padding_frames = Variable(torch.empty(batch_size, self.dim_vid, dtype=vid_feats.dtype)).zero_().to(device)
 
-		# hidden and cell states of 2 LSTM layers
-		state1 = None
-		state2 = None
+		# reset the hidden and cell states of 2 LSTM layers
+		# must be done before running a new batch, otherwise it will treat a new batch as a continuation of a sequence
+		self.state1 = init_hidden(batch_size, self.dim_hidden)
+		self.state2 = init_hidden(batch_size, self.dim_hidden)
 
-		# feed the video features into the first layer of RNN
-		# only 30 steps will be performed since n_frames is always 30 (based on train/test data)
-		output1, state1 = self.rnn1(vid_feats, state1)  # output1: (batch_size, 30, dim_vid)
+		for vid_step_idx in range(n_frames):
+			# feed the video features of current step into the first layer of RNN
+			vid_idx_t = torch.tensor([vid_step_idx]).to(device)
+			vid_step_feats = torch.index_select(vid_feats, 1, vid_idx_t).squeeze(1)
+			self.state1 = self.rnn1(vid_step_feats, self.state1)
 
-		# concatenate paddings (for the 2nd layer) with output from the 1st layer
-		input2 = torch.cat((output1, padding_words), dim=2)  # input2: (batch_size, 30, dim_word)
+			# concatenate paddings (to 2nd layer) with output from the 1st layer; input2: (batch_size, 30, dim_word)
+			input2 = torch.cat((self.state1[0], padding_words), dim=1)
 
-		# feed concatenated output from 1st layer to the 2nd layer
-		output2, state2 = self.rnn2(input2, state2)  # output2: (batch_size, 30, dim_word)
-
-		seq_probs = []
-		seq_preds = []
+			# feed concatenated output from 1st layer to the 2nd layer
+			self.state2 = self.rnn2(input2, self.state2)
 
 		# By this point we have already fed input features (of 30 frames) to 1st layer of LSTM and padded concatenated
 		# inputs to 2nd layer of LSTM. Remaining 3 steps will be performed using word embeddings
+		model_outputs = []
+		seq_k_preds = []
+		net_out = None
 
 		if self.training:
 			sos_tensor = Variable(torch.LongTensor([[self.sos_id]] * batch_size)).to(device)
 			target_variable = torch.cat((sos_tensor, target_variable), dim=1)
-			for i in range(self.max_length - 1):
-				# generate word embeddings using the i-th column (batch_size * 1)
-				current_words = self.embedding(target_variable[:, i])
+			for i in range(self.max_length):
+				if tf_mode or i == 0:
+					current_word_embed = self.embedding(target_variable[:, i])
+				else:
+					# use predicted output instead of ground truth
+					logits = F.log_softmax(net_out, dim=1)
+					_, top_preds = torch.max(logits, dim=1)
 
-				# optimize for GPU (applicable only when CUDA/GPU capability is present in the system)
-				self.rnn1.flatten_parameters()
-				self.rnn2.flatten_parameters()
+					# offset embeddings for <relationship> entity type since predictions are 0-indexed
+					current_word_embed = self.embedding(torch.add(top_preds, 35) if i == 1 else top_preds)
+					logging.info(f"i: {i}, target_variable: {target_variable.tolist()} \n"
+					              f"top_preds: {top_preds.tolist()}")
 
-				# input frame paddings to 1st layer for the last 3 time steps
-				output1, state1 = self.rnn1(padding_frames, state1)  # output1: (batch_size, i, dim_vid)
+				# input frame paddings to 1st layer for the (n_frames + i + 1)th time step
+				self.state1 = self.rnn1(padding_frames, self.state1)
 
 				# concatenate word embeddings with output from the 1st layer
-				input2 = torch.cat((output1, current_words.unsqueeze(1)), dim=2)  # input2: (batch_size, i, dim_word)
-				output2, state2 = self.rnn2(input2, state2)  # output2: (batch_size, i, dim_word)
+				input2 = torch.cat((self.state1[0], current_word_embed), dim=1)
 
-				# feed RNN output to linear layer and get probabilities for each classification
-				logits = self.out(output2.squeeze(1))  # logits: (batch_size, dim_output)
-				seq_probs.append(logits.unsqueeze(1))  # seq_probs: (batch_size, 1, dim_output)
-
-			seq_probs = torch.stack(seq_probs, 1)  # seq_probs: (batch_size, 3, dim_output)
+				# feed to 2nd layer of LSTM and get the final network output
+				self.state2 = self.rnn2(input2, self.state2)
+				net_out = self.linear_layers[i](self.state2[0])
+				model_outputs.append(net_out)
 
 		else:
-			current_words = self.embedding(Variable(torch.LongTensor([self.sos_id] * batch_size)).to(device))
-			for i in range(self.max_length - 1):
-				# optimize for GPU (applicable only when CUDA/GPU capability is present in the system)
-				self.rnn1.flatten_parameters()
-				self.rnn2.flatten_parameters()
+			current_word_embed = self.embedding(Variable(torch.LongTensor([self.sos_id] * batch_size)).to(device))
+			for i in range(self.max_length):
+				self.state1 = self.rnn1(padding_frames, self.state1)
+				input2 = torch.cat((self.state1[0], current_word_embed), dim=1)
+				self.state2 = self.rnn2(input2, self.state2)
+				net_out = self.linear_layers[i](self.state2[0])
+				model_outputs.append(net_out)
 
-				output1, state1 = self.rnn1(padding_frames, state1)  # output1: (batch_size, 1, dim_vid)
-				input2 = torch.cat((output1, current_words.unsqueeze(1)), dim=2)
-				output2, state2 = self.rnn2(input2, state2)  # output2: (batch_size, 1, dim_word)
-				logits = self.out(output2.squeeze(1))  # logits: (batch_size, dim_output)
-				logits = F.log_softmax(logits, dim=1)
-				seq_probs.append(logits.unsqueeze(1))  # seq_probs: (batch_size, 1, dim_output)
+				logits = F.log_softmax(net_out, dim=1)
 
 				# get word embeddings for the next step using the indices of best predictions in the prev step
-				_, preds = torch.max(logits, 1)  # preds: (batch_size, 1)
-				current_words = self.embedding(preds)
-				seq_preds.append(preds.unsqueeze(1))  # seq_preds: (batch_size, 1, 1)
+				_, topk_preds = torch.topk(logits, k=top_k, dim=1)
+				_, top_preds = torch.max(logits, dim=1)
+				seq_k_preds.append(topk_preds)
 
-			seq_probs = torch.stack(seq_probs, 1)  # seq_probs: (batch_size, 3, dim_output)
-			seq_preds = torch.stack(seq_preds, 1)  # seq_probs: (batch_size, 3, 1)
+				# offset embeddings for <relationship> entity type since predictions are 0-indexed
+				current_word_embed = self.embedding(torch.add(top_preds, 35) if i == 1 else top_preds)
 
-		return seq_probs.squeeze(), seq_preds
+		return model_outputs, seq_k_preds

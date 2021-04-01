@@ -4,6 +4,9 @@ data/
 # Run data
 model_run_data/
 
+# Singularity images
+*.simg
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
