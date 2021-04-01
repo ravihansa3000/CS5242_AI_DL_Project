@@ -34,6 +34,7 @@ def test(dataloader, model):
 			output, _ = model(logging, x=videos_tensor)
 			for op in output:
 				_, indices = torch.topk(op, k=5, dim=1)
+				logging.info(indices)
 				preds.append(indices.flatten().tolist())
 		logging.info(f'test generated on video {video_ids}...')
 

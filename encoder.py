@@ -18,6 +18,12 @@ class Encoder(nn.Module):
 		self.vgg11 = models.vgg11(pretrained=True).to(device)
 		for param in self.vgg11.parameters():
 			param.requires_grad = False
+
+		# Learn weights of the final Conv layer
+		for i in [18, 19, 20]:
+			for param in self.vgg11.features[i].parameters():
+				param.requires_grad = True
+
 		self.vgg11.classifier = nn.Linear(25088, output_feature_dims)
 
 		# encoder BiRNN
