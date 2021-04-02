@@ -65,8 +65,8 @@ class S2VTModel(nn.Module):
 		x = self.encoder(logging, x)
 		x_alternate = self.encoder_alternate(logging, x_alternate)
 
-		input1 = x[:, :30, :]
-		input2 = x[:, 30:, :]
+		input1 = torch.cat((x[:, :30, :], x_alternate[:, :30, :]), dim=2)
+		input2 = torch.cat((x[:, 30:, :], x_alternate[:, 30:, :]), dim=2)
 
 		# https://github.com/pytorch/pytorch/issues/3920
 		# paddings to be used for the 2nd layer
