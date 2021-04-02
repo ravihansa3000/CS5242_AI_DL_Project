@@ -67,6 +67,7 @@ class S2VTModel(nn.Module):
 
 		input1 = x[:, :30, :]
 		input2 = x[:, 30:, :]
+		
 		# https://github.com/pytorch/pytorch/issues/3920
 		# paddings to be used for the 2nd layer
 		padding_words = Variable(
