@@ -18,7 +18,8 @@ class S2VTModel(nn.Module):
 
 		# initialize the encoder cnn
 		self.encoder = Encoder(output_feature_dims=cnn_output_feature_dims, dim_hidden=dim_hidden, rnn_cell=self.rnn_cell).to(device)
-
+		self.encoder_alternate = Encoder(output_feature_dims=cnn_output_feature_dims, dim_hidden=dim_hidden, rnn_cell=self.rnn_cell).to(device)
+		
 		# features of video frames are embedded to a 500 dimensional space
 		self.dim_vid = dim_vid
 
@@ -48,7 +49,7 @@ class S2VTModel(nn.Module):
 			nn.Linear(self.dim_hidden, 35).to(device)])
 
 
-	def forward(self, logging, x: torch.Tensor, target_variable=None, opts=None):
+	def forward(self, logging, x: torch.Tensor, x_alternate: torch.Tensor, target_variable=None, opts=None):
 		"""
 		:param x: Tensor containing video features of shape (batch_size, n_frames, cnn_input_c, cnn_input_h, cnn_input_w)
 			n_frames is the number of video frames
@@ -62,6 +63,7 @@ class S2VTModel(nn.Module):
 		"""
 		batch_size = x.shape[0]
 		x = self.encoder(logging, x)
+		x_alternate = self.encoder_alternate(logging, x_alternate)
 
 		input1 = x[:, :30, :]
 		input2 = x[:, 30:, :]
