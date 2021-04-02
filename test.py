@@ -18,6 +18,8 @@ from dataset import VRDataset
 from utils import save_checkpoint
 from model_config import model_options, model_provider, data_transformations
 
+from optical_flow import *
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 logging.basicConfig(
 	format='%(asctime)s %(levelname)-8s %(message)s',
@@ -35,7 +37,7 @@ def test(dataloader, model):
 			for op in output:
 				_, indices = torch.topk(op, k=5, dim=1)
 				preds.append(indices.flatten().tolist())
-		logging.info(f'test generated on video {video_ids}...')
+		logging.info(f'test generated on video {",".join(video_ids})...')
 
 	# preds_df = pd.DataFrame(preds, columns=['object1', 'relationship', 'object2'])
 	preds_res = []
@@ -46,8 +48,9 @@ def test(dataloader, model):
 	return preds_res_df
 
 def main(opts):
+	generate_optical_flow_images(opts, mode='test')
 	model = model_provider(opts)
-	vrdataset = VRDataset(img_root=opts["test_dataset_path"], len=119, transform=data_transformations(opts, mode='test'))
+	vrdataset = VRDataset(img_root=opts["test_dataset_path"], img_root_alternate=os.path.join(opts['optical_flow_test_dataset_path'], opts['optical_flow_type']), len=opts['test_dataset_len'], transform=data_transformations(opts, mode='test'), transform_alternate=data_transformations(opts, mode='default'))
 	dataloader = DataLoader(vrdataset, batch_size=1, shuffle=False, num_workers=opts["num_workers"])
 	if os.path.isfile(opts["trained_model"]):
 		logging.info(f'loading trained model {opts["trained_model"]}')
