@@ -8,30 +8,30 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class Encoder(nn.Module):
 	def __init__(self, output_feature_dims=500, dim_hidden=500, rnn_cell=nn.LSTM, rnn_dropout_p=0):
-		"""Load the pretrained VGG-11 and replace top fc layer."""
+		"""Load the pretrained VGG-16 and replace top fc layer."""
 		super(Encoder, self).__init__()
 
 		self.output_feature_dims = output_feature_dims
 		self.dim_hidden = dim_hidden
 		self.rnn_cell = rnn_cell
 
-		self.vgg11 = models.vgg11(pretrained=True).to(device)
-		for param in self.vgg11.parameters():
+		self.vgg19 = models.vgg19(pretrained=True).to(device)
+		for param in self.vgg19.parameters():
 			param.requires_grad = False
-		self.vgg11.classifier = nn.Linear(25088, output_feature_dims)
 
-		# encoder BiRNN
+		self.vgg19.classifier = nn.Linear(25088, output_feature_dims)
+
 		self.rnn = rnn_cell(self.output_feature_dims, self.dim_hidden, 1,
-							batch_first=True, dropout=rnn_dropout_p, bidirectional=True).to(device)
+							batch_first=True, dropout=rnn_dropout_p).to(device)
 
 
 	def forward(self, logging, x):
-		"""Convert a batch of videos into embeddings and feed them into the encoder BiRNN"""
+		"""Convert a batch of videos into embeddings and feed them into the encoder RNN"""
 		
 		batch_size = x.shape[0]
 		vid_imgs_encoded = []
 		for i in range(batch_size):
-			vid_imgs_encoded.append(self.vgg11(x[i]))
+			vid_imgs_encoded.append(self.vgg19(x[i]))
 		
 		vid_feats = torch.stack(vid_imgs_encoded, dim=0) # batch_size, 30, output_feature_dims
 
@@ -44,5 +44,5 @@ class Encoder(nn.Module):
 		rnn_input = torch.stack(vid_feats_list, dim=1)
 
 		state = None
-		output, _ = self.rnn(rnn_input, state) # batch_size, 33, 2 * dim_hidden
+		output, _ = self.rnn(rnn_input, state) # batch_size, 33, dim_hidden
 		return output

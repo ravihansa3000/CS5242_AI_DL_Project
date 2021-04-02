@@ -67,16 +67,14 @@ def model_provider(opts):
 def data_transformations(opts, mode):
 	if mode == 'train':
 		return transforms.Compose([
-			transforms.Resize(opts["resolution"]),
-			transforms.RandomCrop(opts["resolution"]),
+			transforms.Resize((opts["resolution"], 3 * opts["resolution"] // 2)),
+			transforms.GaussianBlur(5, 1.),
 			transforms.ToTensor(),
 			transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-			AddGaussianNoise(0., 1., p=0.4)
 		])
 	else:
 		return transforms.Compose([
-			transforms.Resize(opts["resolution"]),
-			transforms.CenterCrop(opts["resolution"]),
+			transforms.Resize((opts["resolution"], 3 * opts["resolution"] // 2)),
 			transforms.ToTensor(),
 			transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 		])
