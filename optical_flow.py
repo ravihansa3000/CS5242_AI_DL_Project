@@ -27,7 +27,7 @@ def generate_optical_flow_images(opts, mode):
 		dataset_path = opts['train_dataset_path']
 		dataset_len = opts['train_dataset_len']
 		optical_flow_dataset_path = opts['optical_flow_train_dataset_path']
-	else:
+	elif mode == 'test':
 		dataset_path = opts['test_dataset_path']
 		dataset_len = opts['test_dataset_len']
 		optical_flow_dataset_path = opts['optical_flow_test_dataset_path']
