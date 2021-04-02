@@ -15,6 +15,8 @@ from dataset import VRDataset
 from utils import save_checkpoint
 from model_config import model_options, model_provider, data_transformations
 
+from optical_flow import *
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 logging.basicConfig(
 	format='%(asctime)s %(levelname)-8s %(message)s',
@@ -34,15 +36,16 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 		step = 0
 		true_pos = 0
 		total = 0
-		for batch_idx, (video_ids, videos_tensor) in enumerate(dataloader):
+		for batch_idx, (video_ids, videos_tensor, videos_tensor_alternate) in enumerate(dataloader):
 			model.zero_grad()
 			model.train()
 
 			videos_tensor = videos_tensor.to(device)
+			videos_tensor_alternate = videos_tensor_alternate.to(device)
 
 			annots = torch.LongTensor([[training_annotation[item][0], training_annotation[item][1] + 35, training_annotation[item][2]]
 							 			for item in video_ids]).to(device)
-			output, _ = model(logging, x=videos_tensor, target_variable=annots)
+			output, _ = model(logging, x=videos_tensor, x_alternate=videos_tensor_alternate, target_variable=annots)
 			annots[:, 1] = torch.sub(annots[:, 1], 35)
 			loss = loss_fns[0](output[0], annots[:, 0]) + \
 			       loss_fns[1](output[1], annots[:, 1]) + \
@@ -98,8 +101,8 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 
 
 def main(opts):
+	generate_optical_flow_images(opts, mode='train')
 	model = model_provider(opts)
-
 	if opts["resume"]:
 		if os.path.isfile(opts["resume"]):
 			logging.info(f'loading checkpoint {opts["resume"]}')
@@ -112,7 +115,7 @@ def main(opts):
 	optimizer = optim.Adam(model.parameters(), lr=opts["learning_rate"], weight_decay=opts["weight_decay"])
 	exp_lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=opts["learning_rate_decay_every"],
 	                                             gamma=opts["learning_rate_decay_rate"])
-	vrdataset = VRDataset(img_root=opts["train_dataset_path"], len=447, transform=data_transformations(opts, mode='train'))
+	vrdataset = VRDataset(img_root=opts["train_dataset_path"], img_root_alternate=os.path.join(opts['optical_flow_train_dataset_path'], opts['optical_flow_type']), len=opts['train_dataset_len'], transform=data_transformations(opts, mode='train'), transform_alternate=data_transformations(opts, mode='default'))
 	dataloader = DataLoader(vrdataset, batch_size=opts["batch_size"], shuffle=opts["shuffle"],
 	                        num_workers=opts["num_workers"])
 	train(dataloader, model, optimizer, exp_lr_scheduler, opts)
