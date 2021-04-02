@@ -19,20 +19,14 @@ class Encoder(nn.Module):
 		for param in self.vgg19.parameters():
 			param.requires_grad = False
 
-		# Learn weights of the final Conv layer
-		# for i in [18, 19, 20]:
-		# 	for param in self.vgg19.features[i].parameters():
-		# 		param.requires_grad = True
-
 		self.vgg19.classifier = nn.Linear(25088, output_feature_dims)
 
-		# encoder BiRNN
 		self.rnn = rnn_cell(self.output_feature_dims, self.dim_hidden, 1,
 							batch_first=True, dropout=rnn_dropout_p).to(device)
 
 
 	def forward(self, logging, x):
-		"""Convert a batch of videos into embeddings and feed them into the encoder BiRNN"""
+		"""Convert a batch of videos into embeddings and feed them into the encoder RNN"""
 		
 		batch_size = x.shape[0]
 		vid_imgs_encoded = []
