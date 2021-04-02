@@ -40,14 +40,17 @@ def model_options():
 	parser.add_argument('--gpu', type=str, default='', help='gpu device number')
 	parser.add_argument('--resume', type=str, default='', help='path to latest checkpoint (*.pth)')
 	parser.add_argument('--shuffle', type=bool, default=True, help="boolean indicating shuffle required or not")
-	parser.add_argument('--train_dataset_path', type=str, default="data/train/train", help="train dataset path")
-	parser.add_argument('--test_dataset_path', type=str, default="data/test/test", help="test dataset path")
+	parser.add_argument('--train_dataset_path', type=str, default="./data/train/train", help="train dataset path")
+	parser.add_argument('--train_dataset_len', type=int, default=447, help='train dataset length')
+	parser.add_argument('--test_dataset_path', type=str, default="./data/test/test", help="test dataset path")
+	parser.add_argument('--test_dataset_len', type=int, default=119, help='test dataset length')
 	parser.add_argument('--num_workers', type=int, default=0, help="number of workers to load batch")
-	parser.add_argument('--train_annotation_path', type=str, default="data/training_annotation.json",
+	parser.add_argument('--train_annotation_path', type=str, default="./data/training_annotation.json",
 						help="path to training annotations")
 	parser.add_argument('--resolution', type=int, default=224, help="frame resolution")
 	parser.add_argument('--optical_flow_type', type=str, default='dense_hsv', help='dense_hsv/dense_lines/dense_warp/lucas_kanade')
-	parser.add_argument('--optical_flow_dataset_path', type=str, default="data/train/optical_flow", help="train dataset path for optical flow feature")
+	parser.add_argument('--optical_flow_train_dataset_path', type=str, default="./data/train/optical_flow", help="train dataset path for optical flow images")
+	parser.add_argument('--optical_flow_test_dataset_path', type=str, default='./data/test/optical_flow', help='test dataset path for optical flow images')
 	return parser.parse_args()
 
 def model_provider(opts):
@@ -73,10 +76,15 @@ def data_transformations(opts, mode):
 			transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
 			AddGaussianNoise(0., 1., p=0.4)
 		])
-	else:
+	else mode == 'test':
 		return transforms.Compose([
 			transforms.Resize(opts["resolution"]),
 			transforms.CenterCrop(opts["resolution"]),
 			transforms.ToTensor(),
 			transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+		])
+	else:
+		return transforms.Compose([
+			transforms.Resize((opts["resolution"], 3 * opts["resolution"] // 2)),
+			transforms.ToTensor()
 		])
