@@ -21,15 +21,15 @@ def padded_digit(idx):
 
 def generate_optical_flow_images(opts, mode):
 	dataset_path = None
-	dataset_size = None
+	dataset_len = None
 	optical_flow_dataset_path = None
 	if mode == 'train':
 		dataset_path = opts['train_dataset_path']
-		dataset_size = opts['train_dataset_size']
+		dataset_len = opts['train_dataset_len']
 		optical_flow_dataset_path = opts['optical_flow_train_dataset_path']
-	elif mode == 'test':
+	else:
 		dataset_path = opts['test_dataset_path']
-		dataset_size = opts['test_dataset_size']
+		dataset_len = opts['test_dataset_len']
 		optical_flow_dataset_path = opts['optical_flow_test_dataset_path']
 
 	if not os.path.isdir(optical_flow_dataset_path):
@@ -37,7 +37,7 @@ def generate_optical_flow_images(opts, mode):
 	if not os.path.isdir(os.path.join(optical_flow_dataset_path, opts['optical_flow_type'])):
 		os.mkdir(os.path.join(optical_flow_dataset_path, opts['optical_flow_type']))
 
-	imageDataset = ImageDataset(img_root=dataset_path, len=dataset_size)
+	imageDataset = ImageDataset(img_root=dataset_path, len=dataset_len)
 	dataloader = DataLoader(imageDataset, batch_size=1, num_workers=opts["num_workers"])
 
 	for batch_idx, (video_ids, video_frames) in enumerate(dataloader):
