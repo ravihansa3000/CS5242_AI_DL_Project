@@ -8,10 +8,12 @@ from torch.utils.data import Dataset
 
 class VRDataset(Dataset):
 
-	def __init__(self, img_root, len, transform=None):
+	def __init__(self, img_root, img_root_alternate, len, transform=None, transform_alternate=None):
 		self.root_dir = img_root
+		self.root_dir_alternate = img_root_alternate
 		self.len = len
 		self.transform = transform
+		self.transform_alternate = transform_alternate
 
 	def __len__(self):
 		return self.len
@@ -27,7 +29,13 @@ class VRDataset(Dataset):
 		if self.transform:
 			images = [self.transform(image) for image in images]
 
-		return dir_name, torch.stack(images)
+		vid_path_alternate = os.path.join(self.root_dir_alternate, dir_name)
+		frame_names_alternate = sorted(os.listdir(vid_path_alternate))
+		images_alternate = [Image.open(os.path.join(vid_path_alternate, frame_name_alternate)) for frame_name_alternate in frame_names_alternate]
+		if self.transform_alternate:		
+			images_alternate = [self.transform_alternate(image_alternate) for image_alternate in images_alternate]
+
+		return dir_name, torch.stack(images), torch.stack(images_alternate)
 
 
 class ImageDataset(Dataset):
