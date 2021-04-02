@@ -15,16 +15,16 @@ class Encoder(nn.Module):
 		self.dim_hidden = dim_hidden
 		self.rnn_cell = rnn_cell
 
-		self.vgg16 = models.vgg16(pretrained=True).to(device)
-		for param in self.vgg16.parameters():
+		self.vgg19 = models.vgg19(pretrained=True).to(device)
+		for param in self.vgg19.parameters():
 			param.requires_grad = False
 
 		# Learn weights of the final Conv layer
 		# for i in [18, 19, 20]:
-		# 	for param in self.vgg16.features[i].parameters():
+		# 	for param in self.vgg19.features[i].parameters():
 		# 		param.requires_grad = True
 
-		self.vgg16.classifier = nn.Linear(25088, output_feature_dims)
+		self.vgg19.classifier = nn.Linear(25088, output_feature_dims)
 
 		# encoder BiRNN
 		self.rnn = rnn_cell(self.output_feature_dims, self.dim_hidden, 1,
@@ -37,7 +37,7 @@ class Encoder(nn.Module):
 		batch_size = x.shape[0]
 		vid_imgs_encoded = []
 		for i in range(batch_size):
-			vid_imgs_encoded.append(self.vgg16(x[i]))
+			vid_imgs_encoded.append(self.vgg19(x[i]))
 		
 		vid_feats = torch.stack(vid_imgs_encoded, dim=0) # batch_size, 30, output_feature_dims
 
