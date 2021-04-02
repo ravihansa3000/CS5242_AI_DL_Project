@@ -1,131 +1,63 @@
-import numpy as np
+import os
 import cv2
+import logging
 
-class IOpticalFlow:
-    '''Interface of OpticalFlow classes'''
-    def set1stFrame(self, frame):
-        '''Set the starting frame'''
-        self.prev = frame
+from optical_flow_generator import *
+from model_config import model_options
+from dataset import ImageDataset
+from torch.utils.data import DataLoader
 
-    def apply(self, frame):
-        '''Apply and return result display image (expected to be new object)'''
-        result = frame.copy()
-        self.prev = frame
-        return result
-
-class DenseOpticalFlow(IOpticalFlow):
-    '''Abstract class for DenseOpticalFlow expressions'''
-    def set1stFrame(self, frame):
-        self.prev = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        self.hsv = np.zeros_like(frame)
-        self.hsv[..., 1] = 255
-
-    def apply(self, frame):
-        next = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-        flow = cv2.calcOpticalFlowFarneback(self.prev, next, None,
-                                            0.5, 3, 15, 3, 5, 1.2, 0)
-
-        result = self.makeResult(next, flow)
-        self.prev = next
-        return result
-
-    def makeResult(self, grayFrame, flow):
-        '''Replace this for each expression'''
-        return frame.copy()
-
-class DenseOpticalFlowByHSV(DenseOpticalFlow):
-    def makeResult(self, grayFrame, flow):
-        mag, ang = cv2.cartToPolar(flow[...,0], flow[...,1])
-        self.hsv[...,0] = ang*180/np.pi/2
-        self. hsv[...,2] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
-        return cv2.cvtColor(self.hsv, cv2.COLOR_HSV2BGR)
-
-class DenseOpticalFlowByLines(DenseOpticalFlow):
-    def __init__(self):
-        self.step = 16 # configure this if you need other steps...
-
-    def makeResult(self, grayFrame, flow):
-        h, w = grayFrame.shape[:2]
-        y, x = np.mgrid[self.step//2:h:self.step, self.step//2:w:self.step].reshape(2,-1)
-        fx, fy = flow[y,x].T
-        lines = np.vstack([x, y, x+fx, y+fy]).T.reshape(-1, 2, 2)
-        lines = np.int32(lines + 0.5)
-        vis = cv2.cvtColor(grayFrame, cv2.COLOR_GRAY2BGR)
-        cv2.polylines(vis, lines, 0, (0, 255, 0))
-        for (x1, y1), (x2, y2) in lines:
-            cv2.circle(vis, (x1, y1), 1, (0, 255, 0), -1)
-        return vis
-
-class DenseOpticalFlowByWarp(DenseOpticalFlow):
-    def makeResult(self, grayFrame, flow):
-        h, w = flow.shape[:2]
-        flow = -flow
-        flow[:,:,0] += np.arange(w)
-        flow[:,:,1] += np.arange(h)[:,np.newaxis]
-        return cv2.remap(grayFrame, flow, None, cv2.INTER_LINEAR)
-
-class LucasKanadeOpticalFlow(IOpticalFlow):
-    def __init__(self):
-        # params for ShiTomasi corner detection
-        self.feature_params = dict( maxCorners = 100,
-                                    qualityLevel = 0.3,
-                                    minDistance = 7,
-                                    blockSize = 7 )
-
-        # Parameters for lucas kanade optical flow
-        self.lk_params = dict( winSize  = (15,15),
-                               maxLevel = 2,
-                               criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
-
-        # Create some random colors
-        self.color = np.random.randint(0,255,(100,3))
-
-    def set1stFrame(self, frame):
-        self.old_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        self.p0 = cv2.goodFeaturesToTrack(self.old_gray, mask = None, **self.feature_params)
-        # Create a mask image for drawing purposes
-        self.mask = np.zeros_like(frame)
-
-    def apply(self, frame):
-        frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-        # calculate optical flow
-        p1, st, err = cv2.calcOpticalFlowPyrLK(self.old_gray, frame_gray,
-                                               self.p0, None, **self.lk_params)
-
-        # Select good points
-        good_new = p1[st==1]
-        good_old = self.p0[st==1]
-
-        # draw the tracks
-        for i, (new,old) in enumerate(zip(good_new,good_old)):
-            a,b = new.ravel()
-            c,d = old.ravel()
-            self.mask = cv2.line(self.mask, (a,b), (c,d), self.color[i].tolist(), 2)
-            frame = cv2.circle(frame, (a,b), 5, self.color[i].tolist(), -1)
-        img = cv2.add(frame, self.mask)
-
-        # Now update the previous frame and previous points
-        self.old_gray = frame_gray.copy()
-        self.p0 = good_new.reshape(-1,1,2)
-
-        return img
+logging.basicConfig(
+	format='%(asctime)s %(levelname)-8s %(message)s',
+	level=logging.INFO,
+	datefmt='%Y-%m-%d %H:%M:%S')
 
 
-def OpticalFlowProvider(type):
-    '''Optical flow showcase factory, call by type as shown below'''
-    def dense_by_hsv():
-        return DenseOpticalFlowByHSV()
-    def dense_by_lines():
-        return DenseOpticalFlowByLines()
-    def dense_by_warp():
-        return DenseOpticalFlowByWarp()
-    def lucas_kanade():
-        return LucasKanadeOpticalFlow()
-    return {
-        'dense_hsv': dense_by_hsv,
-        'dense_lines': dense_by_lines,
-        'dense_warp': dense_by_warp,
-        'lucas_kanade': lucas_kanade
-    }.get(type, dense_by_lines)()
+def padded_digit(idx):
+	idx = str(idx)
+	while len(idx) < 6:
+		idx = "0" + idx
+	return idx
+
+def generate_optical_flow_images(opts, mode):
+	dataset_path = None
+	dataset_len = None
+	optical_flow_dataset_path = None
+	if mode == 'train':
+		dataset_path = opts['train_dataset_path']
+		dataset_len = opts['train_dataset_len']
+		optical_flow_dataset_path = opts['optical_flow_train_dataset_path']
+	else:
+		dataset_path = opts['test_dataset_path']
+		dataset_len = opts['test_dataset_len']
+		optical_flow_dataset_path = opts['optical_flow_test_dataset_path']
+
+	if not os.path.isdir(optical_flow_dataset_path):
+		os.mkdir(optical_flow_dataset_path)
+	if not os.path.isdir(os.path.join(optical_flow_dataset_path, opts['optical_flow_type'])):
+		os.mkdir(os.path.join(optical_flow_dataset_path, opts['optical_flow_type']))
+
+	imageDataset = ImageDataset(img_root=dataset_path, len=dataset_len)
+	dataloader = DataLoader(imageDataset, batch_size=1, num_workers=opts["num_workers"])
+
+	for batch_idx, (video_ids, video_frames) in enumerate(dataloader):
+		video_folder_path = os.path.join(optical_flow_dataset_path, opts['optical_flow_type'], video_ids[0])
+		
+		if os.path.isdir(video_folder_path): 
+			# skip optical flow feature generation
+			if len(os.listdir(video_folder_path)) == len(video_frames):
+				logging.info(f'{opts["optical_flow_type"]} optical flow skip image generation on video {",".join(video_ids)}...')
+				continue
+		else:
+			os.mkdir(video_folder_path)
+
+		of_images = to_optical_flow_images(video_frames, opts)
+		for frame_idx in range(len(of_images)):
+			cv2.imwrite(os.path.join(video_folder_path, padded_digit(frame_idx + 1) + '.jpg'), of_images[frame_idx])
+
+		logging.info(f'{opts["optical_flow_type"]} optical flow image generated on video {",".join(video_ids)}...')
+
+
+if __name__ == '__main__':
+	opts = vars(model_options())
+	generate_optical_flow_images(opts, mode='train')
