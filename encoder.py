@@ -7,7 +7,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class Encoder(nn.Module):
-	def __init__(self, output_feature_dims=500, dim_hidden=500, rnn_cell=nn.LSTM, rnn_dropout_p=0):
+	def __init__(self, output_feature_dims=500, dim_hidden=500, rnn_cell=nn.LSTM, rnn_dropout_p=0, encoder_input_dropout=0.5):
 		"""Load the pretrained VGG-16 and replace top fc layer."""
 		super(Encoder, self).__init__()
 
@@ -19,7 +19,7 @@ class Encoder(nn.Module):
 		for param in self.vgg19.parameters():
 			param.requires_grad = False
 
-		self.vgg19.classifier = nn.Linear(25088, output_feature_dims)
+		self.vgg19.classifier = nn.Sequential(nn.Linear(25088, output_feature_dims), nn.Dropout(p=encoder_input_dropout))
 
 		self.rnn = rnn_cell(self.output_feature_dims, self.dim_hidden, 1,
 							batch_first=True, dropout=rnn_dropout_p).to(device)

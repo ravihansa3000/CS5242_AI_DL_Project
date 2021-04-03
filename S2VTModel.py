@@ -9,7 +9,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class S2VTModel(nn.Module):
 	def __init__(self, vocab_size=117, dim_hidden=500, dim_word=500, max_len=4, dim_vid=500, sos_id=117,
-	             n_layers=1, rnn_cell='lstm', rnn_dropout_p=0.2, cnn_output_feature_dims=500, decoder_output_dropout=0.3):
+	             n_layers=1, rnn_cell='lstm', rnn_dropout_p=0.2, decoder_output_dropout=0.5):
 		super(S2VTModel, self).__init__()
 		if rnn_cell.lower() == 'lstm':
 			self.rnn_cell = nn.LSTM
@@ -17,7 +17,7 @@ class S2VTModel(nn.Module):
 			self.rnn_cell = nn.GRU
 
 		# initialize the encoder cnn
-		self.encoder = Encoder(output_feature_dims=cnn_output_feature_dims, dim_hidden=dim_hidden, rnn_cell=self.rnn_cell).to(device)
+		self.encoder = Encoder(output_feature_dims=dim_vid, dim_hidden=dim_hidden, rnn_cell=self.rnn_cell).to(device)
 
 		# features of video frames are embedded to a 500 dimensional space
 		self.dim_vid = dim_vid
