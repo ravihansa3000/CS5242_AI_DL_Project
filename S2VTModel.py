@@ -40,7 +40,7 @@ class S2VTModel(nn.Module):
 		# word embeddings lookup table with; + 1 for <sos>
 		self.embedding = nn.Embedding(self.dim_output + 1, self.dim_word)
 
-		self.rnn = self.rnn_cell(2 * self.dim_hidden + self.dim_word, self.dim_hidden, n_layers,
+		self.rnn = self.rnn_cell(self.dim_hidden * 2 + self.dim_word, self.dim_hidden, n_layers,
 		                          batch_first=True, dropout=rnn_dropout_p).to(device)
 
 		self.out = nn.ModuleList([ \
@@ -73,49 +73,47 @@ class S2VTModel(nn.Module):
 		padding_words = Variable(
 			torch.empty(batch_size, 30, self.dim_word, dtype=x.dtype)).zero_().to(device)
 
-		state1 = None
+		state = None
 
 		# concatenate paddings (for the 2nd layer) with output from the 1st layer
 		input1 = torch.cat((input1, padding_words), dim=2)  # input2: (batch_size, 30, dim_word)
 
 		# feed concatenated output from 1st layer to the 2nd layer
-		output1, state1 = self.rnn(input1, state1)  # output2: (batch_size, 30, dim_word)
+		output, state = self.rnn(input1, state)  # output2: (batch_size, 30, dim_word)
 
 		seq_probs = []
 		seq_preds = []
 
 		# By this point we have already fed input features (of 30 frames) to 1st layer of LSTM and padded concatenated
 		# inputs to 2nd layer of LSTM. Remaining 3 steps will be performed using word embeddings
-
 		if self.training:
 			sos_tensor = Variable(torch.LongTensor([[self.sos_id]] * batch_size)).to(device)
 			target_variable = torch.cat((sos_tensor, target_variable), dim=1)
 			for i in range(self.max_length - 1):
 
-				current_words = self.embedding(target_variable[:, i])
+				current_words = self.embedding(target_variable[:, i]) # batch_size, dim_word
 				self.rnn.flatten_parameters()
 
-				input1 = torch.cat((input2[:, i, :].unsqueeze(1), current_words.unsqueeze(1)), dim=2)
-				output1, state1 = self.rnn(input1, state1)
+				input1 = torch.cat((input2[:, i, :].unsqueeze(1), current_words.unsqueeze(1)), dim=2) # batch_size, 1, dim_hidden + dim_word
+				output, state = self.rnn(input1, state) # batch_size, 1, dim_hidden
 
-				logits = self.out[i](output1.squeeze(1))
+				logits = self.out[i](output.squeeze(1)) # batch_size, 35/82/35
 				seq_probs.append(logits)
 		else:
 			current_words = self.embedding(Variable(torch.LongTensor([self.sos_id] * batch_size)).to(device))
 			for i in range(self.max_length - 1):
-				# optimize for GPU (applicable only when CUDA/GPU capability is present in the system)
+
 				self.rnn.flatten_parameters()
 
 				input1 = torch.cat((input2[:, i, :].unsqueeze(1), current_words.unsqueeze(1)), dim=2)
-				output1, state1 = self.rnn(input1, state1)
-				logits = self.out[i](output1.squeeze(1))  # logits: (batch_size, dim_output)
+				output, state = self.rnn(input1, state)
+				logits = self.out[i](output.squeeze(1))
 				logits = F.softmax(logits, dim=1)
-				seq_probs.append(logits)  # seq_probs: (batch_size, 1, dim_output)
+				seq_probs.append(logits)
 
-				# get word embeddings for the next step using the indices of best predictions in the prev step
-				preds = torch.argmax(logits, dim=1)  # preds: (batch_size, 1)
+				preds = torch.argmax(logits, dim=1)
 				preds = torch.LongTensor(preds)
 				current_words = self.embedding(torch.add(preds, 35) if i == 1 else preds)
-				seq_preds.append(preds.unsqueeze(1))  # seq_preds: (batch_size, 1, 1)
+				seq_preds.append(preds.unsqueeze(1))
 
 		return seq_probs, seq_preds

@@ -76,7 +76,7 @@ def data_transformations(opts, mode):
 			transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
 			AddGaussianNoise(0., 1., p=0.4)
 		])
-	else mode == 'test':
+	elif mode == 'test':
 		return transforms.Compose([
 			transforms.Resize(opts["resolution"]),
 			transforms.CenterCrop(opts["resolution"]),
