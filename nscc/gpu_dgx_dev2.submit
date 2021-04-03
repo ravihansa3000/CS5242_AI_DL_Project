@@ -1,0 +1,9 @@
+#!/bin/bash
+#PBS -j oe
+#PBS -q dgx-dev
+#PBS -l select=1:ncpus=30:ngpus=5
+#PBS -l walltime=24:00:00
+#PBS -P 51070190
+#PBS -N dgx-dev2
+
+sleep 1d
