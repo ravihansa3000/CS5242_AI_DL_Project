@@ -40,7 +40,7 @@ class S2VTModel(nn.Module):
 		# word embeddings lookup table with; + 1 for <sos>
 		self.embedding = nn.Embedding(self.dim_output + 1, self.dim_word)
 
-		self.rnn = self.rnn_cell(self.dim_hidden + self.dim_word, self.dim_hidden, n_layers,
+		self.rnn = self.rnn_cell(self.dim_hidden * 2 + self.dim_word, self.dim_hidden, n_layers,
 		                          batch_first=True, dropout=rnn_dropout_p).to(device)
 
 		self.out = nn.ModuleList([ \

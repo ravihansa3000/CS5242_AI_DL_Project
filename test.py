@@ -30,15 +30,16 @@ logging.basicConfig(
 def test(dataloader, model):
 	preds = []
 	model.eval()
-	for batch_idx, (video_ids, videos_tensor) in enumerate(dataloader):
+	for batch_idx, (video_ids, videos_tensor, videos_tensor_alternate) in enumerate(dataloader):
 		videos_tensor = videos_tensor.to(device)
+		videos_tensor_alternate = videos_tensor_alternate.to(device)
 		with torch.no_grad():
-			output, _ = model(logging, x=videos_tensor)
+			output, _ = model(logging, x=videos_tensor, x_alternate=videos_tensor_alternate)
 			for op in output:
 				_, indices = torch.topk(op, k=5, dim=1)
 				logging.info(indices)
 				preds.append(indices.flatten().tolist())
-		logging.info(f'test generated on video {",".join(video_ids})...')
+		logging.info(f'test generated on video {",".join(video_ids)}...')
 
 	# preds_df = pd.DataFrame(preds, columns=['object1', 'relationship', 'object2'])
 	preds_res = []
