@@ -48,6 +48,7 @@ def model_options():
 	parser.add_argument('--resolution', type=int, default=224, help="frame resolution")
 	parser.add_argument('--optical_flow_type', type=str, default='dense_hsv', help='dense_hsv/dense_lines/dense_warp/lucas_kanade')
 	parser.add_argument('--optical_flow_dataset_path', type=str, default="data/train/optical_flow", help="train dataset path for optical flow feature")
+	parser.add_argument("--image_rotation", type=float, default=7, help="image rotation angle in degrees.")
 	return parser.parse_args()
 
 def model_provider(opts):
@@ -68,7 +69,7 @@ def data_transformations(opts, mode):
 	if mode == 'train':
 		return transforms.Compose([
 			transforms.Resize((opts["resolution"], 3 * opts["resolution"] // 2)),
-			transforms.RandomRotation(15),
+			transforms.RandomRotation(opts["image_rotation"]),
 			transforms.GaussianBlur(5, 1.),
 			transforms.ToTensor(),
 			transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
