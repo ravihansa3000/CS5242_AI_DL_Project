@@ -22,6 +22,7 @@ class S2VTModel(nn.Module):
 
 		# initialize the encoder cnn
 		self.encoder = Encoder(dim_vid=self.dim_vid, dim_hidden=dim_hidden, rnn_cell=self.rnn_cell).to(device)
+		self.encoder_alternate = Encoder(dim_vid=self.dim_vid, dim_hidden=dim_hidden, rnn_cell=self.rnn_cell).to(device)
 
 		# objects: 35, relationships: 82; <object1>,<relationship>,<object2>
 		self.dim_outputs = [35, 82, 35]
@@ -45,7 +46,7 @@ class S2VTModel(nn.Module):
 		# word embeddings lookup table with; + 1 for <sos>
 		self.embedding = nn.Embedding(self.vocab_size, self.dim_word)
 
-		self.rnn = self.rnn_cell(self.dim_hidden + self.dim_word, self.dim_hidden, n_layers,
+		self.rnn = self.rnn_cell(self.dim_hidden * 2 + self.dim_word, self.dim_hidden, n_layers,
 		                         batch_first=True, dropout=rnn_dropout_p).to(device)
 		for name, param in self.rnn.named_parameters():
 			if 'bias' in name:
@@ -57,7 +58,7 @@ class S2VTModel(nn.Module):
 		for m_lin in self.out_lin_mods:
 			torch.nn.init.xavier_uniform_(m_lin.weight)
 
-	def forward(self, x: torch.Tensor, target_variable=None, tf_mode=True, top_k=5):
+	def forward(self, x: torch.Tensor, x_alternate: torch.Tensor, target_variable=None, tf_mode=True, top_k=5):
 		"""
 		:param x: Tensor containing video features of shape (batch_size, n_frames, cnn_input_c, cnn_input_h, cnn_input_w)
 			n_frames is the number of video frames
@@ -75,9 +76,10 @@ class S2VTModel(nn.Module):
 		"""
 		batch_size = x.shape[0]
 		enc_out = self.encoder(x)
+		enc_out_alternate = self.encoder_alternate(x_alternate)
 
-		input1 = enc_out[:, :30, :]  # input1: (batch_size, 30, dim_vid)
-		input2 = enc_out[:, 30:, :]  # input2: (batch_size, 3, dim_word)
+		input1 = torch.cat((enc_out[:, :30, :], enc_out_alternate[:, :30, :]), dim=2)  # input1: (batch_size, 30, dim_vid * 2)
+		input2 = torch.cat((enc_out[:, 30:, :], enc_out_alternate[:, 30:, :]), dim=2)  # input2: (batch_size, 3, dim_word * 2)
 
 		# https://github.com/pytorch/pytorch/issues/3920
 		# paddings to be used for the 2nd layer

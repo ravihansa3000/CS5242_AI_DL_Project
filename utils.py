@@ -134,7 +134,7 @@ def calculate_training_mAPk(dataloader, model, training_annotation, opts=None):
 	mAPk_obj1_scores = []
 	mAPk_rel_scores = []
 	mAPk_obj2_scores = []
-	for batch_idx, (video_ids, videos_tensor) in enumerate(dataloader):
+	for batch_idx, (video_ids, videos_tensor, videos_tensor_alternate) in enumerate(dataloader):
 		videos_tensor = videos_tensor.to(device)
 		annotations_t = torch.LongTensor([
 			[training_annotation[item][0], training_annotation[item][1], training_annotation[item][2]]
@@ -143,7 +143,7 @@ def calculate_training_mAPk(dataloader, model, training_annotation, opts=None):
 
 		model.eval()
 		with torch.no_grad():
-			_, topk_preds_list = model(x=videos_tensor, target_variable=None, top_k=opts["mAP_k"])
+			_, topk_preds_list = model(x=videos_tensor, x_alternate=videos_tensor_alternate, target_variable=None, top_k=opts["mAP_k"])
 
 			# calculate mean average precision
 			mAPk_scores = calculate_mapk_batch(topk_preds_list, annotations_t, opts["mAP_k"])

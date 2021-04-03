@@ -12,6 +12,8 @@ import utils
 from dataset import VRDataset
 from model_config import model_options, model_provider, data_transformations
 
+from optical_flow import *
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 logging.basicConfig(
 	format='%(asctime)s %(levelname)-8s %(message)s',
@@ -39,11 +41,12 @@ def test(dataloader, model, opts):
 	preds_sub_list = []  # store results for final submission csv
 	preds_ann_list = []  # store results with ground truth labels of train data (when testing train or eval data)
 
-	for batch_idx, (video_ids, videos_tensor) in enumerate(dataloader):
+	for batch_idx, (video_ids, videos_tensor, videos_tensor_alternate) in enumerate(dataloader):
 		videos_tensor = videos_tensor.to(device)
+		videos_tensor_alternate = videos_tensor_alternate.to(device)
 		model.eval()
 		with torch.no_grad():
-			_, topk_preds = model(x=videos_tensor, top_k=opts["mAP_k"])
+			_, topk_preds = model(x=videos_tensor, x_alternate=videos_tensor_alternate, top_k=opts["mAP_k"])
 
 			# calculate mean average precision if testing training data
 			if opts["data_split"] in ["train", "eval"]:
@@ -104,6 +107,7 @@ def test(dataloader, model, opts):
 
 
 def main(opts):
+	generate_optical_flow_images(opts, mode='test')
 	model = model_provider(opts)
 
 	logging.info(json.dumps(cli_opts, indent=4))
@@ -121,8 +125,8 @@ def main(opts):
 	if opts["data_split"] in ["train", "eval"]:
 		opts["test_dataset_path"] = opts["train_dataset_path"]
 
-	vrdataset = VRDataset(img_root=opts["test_dataset_path"], len=opts["test_dataset_size"],
-	                      transform=data_transformations(opts, mode='test'))
+	vrdataset = VRDataset(img_root=opts["test_dataset_path"], img_root_alternate=os.path.join(opts['optical_flow_test_dataset_path'], opts['optical_flow_type']), len=opts["test_dataset_size"],
+	                      transform=data_transformations(opts, mode='test'), transform_alternate=data_transformations(opts, mode='default'))
 	dataloader = DataLoader(vrdataset, batch_size=opts["batch_size"], shuffle=False, num_workers=opts["num_workers"])
 
 	test(dataloader, model, opts)

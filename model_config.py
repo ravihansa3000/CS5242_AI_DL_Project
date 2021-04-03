@@ -59,10 +59,9 @@ def model_options():
 	parser.add_argument('--train_annotation_path', type=str, default="data/training_annotation.json",
 	                    help="path to training annotations")
 	parser.add_argument('--resolution', type=int, default=224, help="frame resolution")
-	parser.add_argument('--optical_flow_type', type=str, default='dense_hsv',
-	                    help='dense_hsv/dense_lines/dense_warp/lucas_kanade')
-	parser.add_argument('--optical_flow_dataset_path', type=str, default="data/train/optical_flow",
-	                    help="train dataset path for optical flow feature")
+	parser.add_argument('--optical_flow_type', type=str, default='dense_hsv', help='dense_hsv/dense_lines/dense_warp/lucas_kanade')
+	parser.add_argument('--optical_flow_train_dataset_path', type=str, default="./data/train/optical_flow", help="train dataset path for optical flow images")
+	parser.add_argument('--optical_flow_test_dataset_path', type=str, default='./data/test/optical_flow', help='test dataset path for optical flow images')
 	parser.add_argument('--mAP_k', type=int, default=5, help='mean Average Precision at k')
 	parser.add_argument('--mAP_k_print_interval', type=int, default=5, help='print stats interval for mAP@k')
 	parser.add_argument('--data_split', type=str, default='test', help='sample data split (train, eval, test)')
@@ -92,9 +91,14 @@ def data_transformations(opts, mode):
 			transforms.ToTensor(),
 			transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
 		])
-	else:
+	elif mode == 'test':
 		return transforms.Compose([
 			transforms.Resize((opts["resolution"], 3 * opts["resolution"] // 2)),
 			transforms.ToTensor(),
 			transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+		])
+	else:
+		return transforms.Compose([
+			transforms.Resize((opts["resolution"], 3 * opts["resolution"] // 2)),
+			transforms.ToTensor()
 		])

@@ -14,6 +14,8 @@ from dataset import VRDataset
 from model_config import model_options, model_provider, data_transformations
 from utils import save_checkpoint
 
+from optical_flow import *
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 logging.basicConfig(
 	format='%(asctime)s %(levelname)-8s %(message)s',
@@ -40,18 +42,19 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 		# disable teacher forcing after epoch milestone has elapsed
 		tf_mode = False if epoch > opts["disable_tf_after_epoch"] else True
 
-		for batch_idx, (video_ids, videos_tensor) in enumerate(dataloader):
+		for batch_idx, (video_ids, videos_tensor, videos_tensor_alternate) in enumerate(dataloader):
 			# zero the parameter gradients
 			model.train()
 			optimizer.zero_grad()
 
 			videos_tensor = videos_tensor.to(device)
+			videos_tensor_alternate = videos_tensor_alternate.to(device)
 			# offset <relationship> annotations when generating word embeddings
 			batch_ann_t = torch.LongTensor([
 				[train_ann_dict[item][0], train_ann_dict[item][1] + 35, train_ann_dict[item][2]]
 				for item in video_ids
 			]).to(device)
-			output, _ = model(x=videos_tensor, target_variable=batch_ann_t, tf_mode=tf_mode)
+			output, _ = model(x=videos_tensor, x_alternate=videos_tensor_alternate, target_variable=batch_ann_t, tf_mode=tf_mode)
 
 			# de-offset <relationship> annotations when calculating loss since linear output has 35 nodes
 			batch_ann_t[:, 1] = torch.sub(batch_ann_t[:, 1], 35)
@@ -118,8 +121,8 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 
 
 def main(opts):
+	generate_optical_flow_images(opts, mode='train')
 	model = model_provider(opts)
-
 	if opts["resume"]:
 		if os.path.isfile(opts["resume"]):
 			logging.info(f'loading checkpoint {opts["resume"]}')
@@ -133,8 +136,8 @@ def main(opts):
 	optimizer = optim.Adam(model.parameters(), lr=opts["learning_rate"], weight_decay=opts["weight_decay"])
 	exp_lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=opts["learning_rate_decay_every"],
 	                                             gamma=opts["learning_rate_decay_rate"])
-	vrdataset = VRDataset(img_root=opts["train_dataset_path"], len=opts["train_dataset_size"],
-	                      transform=data_transformations(opts, mode='train'))
+	vrdataset = VRDataset(img_root=opts["train_dataset_path"], img_root_alternate=os.path.join(opts['optical_flow_train_dataset_path'], opts['optical_flow_type']), len=opts["train_dataset_size"],
+	                      transform=data_transformations(opts, mode='train'), transform_alternate=data_transformations(opts, mode='default'))
 	dataloader = DataLoader(vrdataset, batch_size=opts["batch_size"], shuffle=opts["shuffle"],
 	                        num_workers=opts["num_workers"])
 
