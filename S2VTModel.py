@@ -9,7 +9,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class S2VTModel(nn.Module):
 	def __init__(self, vocab_size=117, dim_hidden=500, dim_word=500, max_len=4, dim_vid=500, sos_id=117,
-	             n_layers=1, rnn_cell='lstm', rnn_dropout_p=0.2, cnn_output_feature_dims=500):
+	             n_layers=1, rnn_cell='lstm', rnn_dropout_p=0.2, cnn_output_feature_dims=500, decoder_output_dropout=0.3):
 		super(S2VTModel, self).__init__()
 		if rnn_cell.lower() == 'lstm':
 			self.rnn_cell = nn.LSTM
@@ -42,6 +42,7 @@ class S2VTModel(nn.Module):
 		self.rnn = self.rnn_cell(self.dim_hidden + self.dim_word, self.dim_hidden, n_layers,
 		                          batch_first=True, dropout=rnn_dropout_p).to(device)
 
+		self.decoder_output_dropout = nn.ModuleList([nn.Dropout(p=decoder_output_dropout) for _ in range(3)])
 		self.out = nn.ModuleList([ \
 			nn.Linear(self.dim_hidden, 35).to(device), \
 			nn.Linear(self.dim_hidden, 82).to(device), \
@@ -95,6 +96,7 @@ class S2VTModel(nn.Module):
 				input1 = torch.cat((input2[:, i, :].unsqueeze(1), current_words.unsqueeze(1)), dim=2) # batch_size, 1, dim_hidden + dim_word
 				output, state = self.rnn(input1, state) # batch_size, 1, dim_hidden
 
+				output = self.decoder_output_dropout[i](output)
 				logits = self.out[i](output.squeeze(1)) # batch_size, 35/82/35
 				seq_probs.append(logits)
 		else:
@@ -105,6 +107,8 @@ class S2VTModel(nn.Module):
 
 				input1 = torch.cat((input2[:, i, :].unsqueeze(1), current_words.unsqueeze(1)), dim=2)
 				output, state = self.rnn(input1, state)
+
+				output = self.decoder_output_dropout[i](output)
 				logits = self.out[i](output.squeeze(1))
 				logits = F.softmax(logits, dim=1)
 				seq_probs.append(logits)
