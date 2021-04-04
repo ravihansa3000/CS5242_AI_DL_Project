@@ -56,7 +56,7 @@ class S2VTModel(nn.Module):
 				nn.init.xavier_normal_(param)
 
 		self.out_lin_mods = nn.ModuleList([nn.Linear(self.dim_hidden, dim_out).to(device) for dim_out in self.dim_outputs])
-		self.dropout = [nn.Dropout(p=0.5) for _ in range(3)]
+		self.dropout = nn.ModuleList([nn.Dropout(p=0.5) for _ in range(3)])
 		for m_lin in self.out_lin_mods:
 			torch.nn.init.xavier_uniform_(m_lin.weight)
 
