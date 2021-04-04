@@ -19,6 +19,10 @@ class Encoder(nn.Module):
 		for param in self.vgg19.parameters():
 			param.requires_grad = False
 
+		for i in [34, 35, 36]:
+			for param in self.vgg19.features[i].parameters():
+				param.requires_grad = True
+
 		self.vgg19.classifier = nn.Sequential(nn.Linear(25088, output_feature_dims), nn.Dropout(p=encoder_input_dropout))
 
 		self.rnn = rnn_cell(self.output_feature_dims, self.dim_hidden, 1,
