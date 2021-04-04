@@ -50,7 +50,7 @@ def model_options():
 	                    help='directory to store checkpointed models')
 	parser.add_argument('--gpu', type=str, default='', help='gpu device number')
 	parser.add_argument('--resume', type=str, default='', help='path to latest checkpoint (*.pth)')
-	parser.add_argument('--shuffle', type=bool, default=False, help="boolean indicating shuffle required or not")
+	parser.add_argument('--shuffle', type=bool, default=True, help="boolean indicating shuffle required or not")
 
 	parser.add_argument('--train_dataset_path', type=str, default="data/train/train", help="train dataset path")
 	parser.add_argument('--train_dataset_size', type=int, default=447, help="train dataset size (train samples count)")
