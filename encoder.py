@@ -22,7 +22,7 @@ class Encoder(nn.Module):
 		self.vgg19 = models.vgg19(pretrained=True).to(device)
 		for param in self.vgg19.parameters():
 			param.requires_grad = False
-		self.vgg19.classifier = nn.Linear(25088, self.dim_vid)
+		self.vgg19.classifier = nn.Sequential(nn.Linear(25088, self.dim_vid), nn.ReLU(), nn.Dropout(p=0.5))
 
 
 		# encoder RNN
