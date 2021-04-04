@@ -70,7 +70,7 @@ def model_options():
 	parser.add_argument('--mAP_k', type=int, default=5, help='mean Average Precision at k')
 	parser.add_argument('--mAP_k_print_interval', type=int, default=5, help='print stats interval for mAP@k')
 	parser.add_argument('--data_split', type=str, default='test', help='sample data split (train, eval, test)')
-
+	parser.add_argument("--image_rotation", type=float, default=7, help='rotate frame by(in degrees)')
 	return parser.parse_args()
 
 
