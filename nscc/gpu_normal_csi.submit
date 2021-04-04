@@ -1,0 +1,9 @@
+#!/bin/bash
+#PBS -j oe
+#PBS -q gpu
+#PBS -l select=1:ncpus=24:ngpus=1
+#PBS -l walltime=24:00:00
+#PBS -P 11001079
+#PBS -N gpu-normal-job
+
+sleep 1d
