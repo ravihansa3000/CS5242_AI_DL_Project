@@ -37,7 +37,8 @@ bash ./run_train.sh --batch_size 25 --learning_rate 3e-5
 ## Setup conda environment
 
 ```
-conda env create --file environment.yml --name cs5242_proj
+# for CUDA 10.1 + pytorch 1.7.1
+conda env create --file environment_pyt171_cuda101.yml --name cs5242_proj
 ```
 
 ## Download model to local

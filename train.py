@@ -1,20 +1,17 @@
 import json
-import logging
-import os
+import random
 import sys
 import time
 
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.utils.data import DataLoader
 
 import utils
 from dataset import VRDataset
-from model_config import model_options, model_provider, data_transformations
-from utils import save_checkpoint
-
+from model_config import model_provider, data_transformations_vid, data_transformations_opf
 from optical_flow import *
+from utils import save_checkpoint
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 logging.basicConfig(
@@ -39,22 +36,20 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 		optimizer_lr_str = ''
 		mAPk_scores_str = 'N/A'
 
-		# disable teacher forcing after epoch milestone has elapsed
-		tf_mode = False if epoch > opts["disable_tf_after_epoch"] else True
-
-		for batch_idx, (video_ids, videos_tensor, videos_tensor_alternate) in enumerate(dataloader):
+		for batch_idx, (video_ids, vid_tensor, opf_tensor) in enumerate(dataloader):
 			# zero the parameter gradients
 			model.train()
 			optimizer.zero_grad()
 
-			videos_tensor = videos_tensor.to(device)
-			videos_tensor_alternate = videos_tensor_alternate.to(device)
+			vid_tensor = vid_tensor.to(device)
+			opf_tensor = opf_tensor.to(device)
+
 			# offset <relationship> annotations when generating word embeddings
 			batch_ann_t = torch.LongTensor([
 				[train_ann_dict[item][0], train_ann_dict[item][1] + 35, train_ann_dict[item][2]]
 				for item in video_ids
 			]).to(device)
-			output, _ = model(x=videos_tensor, x_alternate=videos_tensor_alternate, target_variable=batch_ann_t, tf_mode=tf_mode)
+			output, _ = model(x_vid=vid_tensor, x_opf=opf_tensor, target_variable=batch_ann_t, tf_rate=opts["tf_rate"])
 
 			# de-offset <relationship> annotations when calculating loss since linear output has 35 nodes
 			batch_ann_t[:, 1] = torch.sub(batch_ann_t[:, 1], 35)
@@ -70,7 +65,7 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 
 			# print stats for the step
 			losses_str = f"{total_loss:.6f} :: {loss1:.6f}, {loss2:.6f}, {loss3:.6f}"
-			optimizer_lr_str = f'{optimizer.param_groups[0]["lr"]:.3f}'
+			optimizer_lr_str = f'{lr_scheduler.get_last_lr()[0]:.6f}'
 
 			with torch.no_grad():
 				preds = [F.log_softmax(op, dim=1) for op in output]
@@ -94,8 +89,7 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 
 		# calculate overall MAP@k
 		if epoch % opts["mAP_k_print_interval"] == 0:
-			obj1_score, rel_score, obj2_score = utils.calculate_training_mAPk(
-				dataloader, model, train_ann_dict, opts)
+			obj1_score, rel_score, obj2_score = utils.calculate_training_mAPk(dataloader, model, train_ann_dict, opts)
 			mAPk_scores_str = f'{obj1_score:.3f}, {rel_score:.3f}, {obj2_score:.3f}'
 
 		# write epoch status update to file
@@ -121,7 +115,6 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 
 
 def main(opts):
-	generate_optical_flow_images(opts, mode='train')
 	model = model_provider(opts)
 	if opts["resume"]:
 		if os.path.isfile(opts["resume"]):
@@ -133,15 +126,39 @@ def main(opts):
 			raise RuntimeError(f'no checkpoint found at {opts["resume"]}')
 
 	logging.info(model)
-	optimizer = optim.Adam(model.parameters(), lr=opts["learning_rate"], weight_decay=opts["weight_decay"])
-	exp_lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=opts["learning_rate_decay_every"],
-	                                             gamma=opts["learning_rate_decay_rate"])
-	vrdataset = VRDataset(img_root=opts["train_dataset_path"], img_root_alternate=os.path.join(opts['optical_flow_train_dataset_path'], opts['optical_flow_type']), len=opts["train_dataset_size"],
-	                      transform=data_transformations(opts, mode='train'), transform_alternate=data_transformations(opts, mode='default'))
-	dataloader = DataLoader(vrdataset, batch_size=opts["batch_size"], shuffle=opts["shuffle"],
-	                        num_workers=opts["num_workers"])
+	optimizer = optim.Adam(
+		model.parameters(),
+		lr=opts["learning_rate"],
+		weight_decay=opts["weight_decay"]
+	)
 
-	train(dataloader, model, optimizer, exp_lr_scheduler, opts)
+	# set scheduler last_epoch in case resuming from a previous run
+	if opts["start_epoch"] == 0:
+		last_epoch = -1
+	else:
+		last_epoch = opts["start_epoch"]
+
+	lr_scheduler = optim.lr_scheduler.StepLR(
+		optimizer,
+		step_size=opts["learning_rate_decay_every"],
+		gamma=opts["learning_rate_decay_rate"],
+		last_epoch=last_epoch
+	)
+	vrdataset = VRDataset(
+		vid_root=opts["train_dataset_path"],
+		opf_root=os.path.join(opts['optical_flow_train_dataset_path'], opts['optical_flow_type']),
+		n_samples=opts["train_dataset_size"],
+		transform_vid=data_transformations_vid(opts, mode='train'),
+		transform_opf=data_transformations_opf(opts)
+	)
+	dataloader = DataLoader(
+		vrdataset,
+		batch_size=opts["batch_size"],
+		shuffle=opts["shuffle"],
+		num_workers=opts["num_workers"]
+	)
+
+	train(dataloader, model, optimizer, lr_scheduler, opts)
 	logging.info("Training completed")
 
 

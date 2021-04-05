@@ -1,23 +1,12 @@
-import sys
 import json
-import os
-import argparse
-import time
-import subprocess
-import logging
+import sys
 
-import numpy as np
 import pandas as pd
 import torch
-from torch.utils.data import DataLoader
-import torch.optim as optim
-from torchvision import transforms
 
-from S2VTModel import S2VTModel
+import utils
 from dataset import VRDataset
-from utils import save_checkpoint
-from model_config import model_options, model_provider, data_transformations
-
+from model_config import model_provider, data_transformations_vid, data_transformations_opf
 from optical_flow import *
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -27,42 +16,122 @@ logging.basicConfig(
 	datefmt='%Y-%m-%d %H:%M:%S')
 
 
-def test(dataloader, model):
-	preds = []
-	model.eval()
-	for batch_idx, (video_ids, videos_tensor, videos_tensor_alternate) in enumerate(dataloader):
-		videos_tensor = videos_tensor.to(device)
-		videos_tensor_alternate = videos_tensor_alternate.to(device)
-		with torch.no_grad():
-			output, _ = model(logging, x=videos_tensor, x_alternate=videos_tensor_alternate)
-			for op in output:
-				_, indices = torch.topk(op, k=5, dim=1)
-				preds.append(indices.flatten().tolist())
-		logging.info(f'test generated on video {",".join(video_ids)}...')
+def test(dataloader, model, opts):
+	# load annotations labels if testing training data
+	with open(opts["train_annotation_path"]) as f:
+		train_ann_dict = json.load(f)
 
-	# preds_df = pd.DataFrame(preds, columns=['object1', 'relationship', 'object2'])
-	preds_res = []
-	for pred in preds:
-		preds_res.append(" ".join(map(str, pred)))
-	preds_res_df = pd.DataFrame(preds_res, columns=['label'])
-	preds_res_df.index.name = 'ID'
-	return preds_res_df
+	# load annotations entities
+	with open("data/object1_object2.json") as f:
+		object_types = json.load(f)
+		obj_idx_map = dict((v, k) for k, v in object_types.items())
+
+	with open("data/relationship.json") as f:
+		rel_types = json.load(f)
+		rel_idx_map = dict((v, k) for k, v in rel_types.items())
+
+	obj1_scores = []
+	rel_scores = []
+	obj2_scores = []
+	preds_sub_list = []  # store results for final submission csv
+	preds_ann_list = []  # store results with ground truth labels of train data (when testing train or eval data)
+
+	for batch_idx, (video_ids, vid_tensor, opf_tensor) in enumerate(dataloader):
+		vid_tensor = vid_tensor.to(device)
+		opf_tensor = opf_tensor.to(device)
+		model.eval()
+		with torch.no_grad():
+			_, topk_preds = model(x_vid=vid_tensor, x_opf=opf_tensor, top_k=opts["mAP_k"])
+
+			# calculate mean average precision if testing training or evaluation data
+			if opts["data_split"] in ["train", "eval"]:
+				batch_ann_t = torch.LongTensor([
+					[train_ann_dict[item][0], train_ann_dict[item][1], train_ann_dict[item][2]]
+					for item in video_ids
+				]).to(device)
+				mAPk_scores_batch = utils.calculate_mapk_batch(topk_preds, batch_ann_t, opts["mAP_k"])
+				obj1_scores.append(mAPk_scores_batch[0])
+				rel_scores.append(mAPk_scores_batch[1])
+				obj2_scores.append(mAPk_scores_batch[2])
+
+		# organize predictions per sample in <id>:<label> format
+		for vid_idx in range(len(video_ids)):
+			sample_obj1_k = topk_preds[0][vid_idx].tolist()
+			sample_rel_k = topk_preds[1][vid_idx].tolist()
+			sample_obj2_k = topk_preds[2][vid_idx].tolist()
+
+			obj1_k_str = " ".join(str(x) for x in sample_obj1_k)
+			rel_k_str = " ".join(str(x) for x in sample_rel_k)
+			obj2_k_str = " ".join(str(x) for x in sample_obj2_k)
+
+			preds_sub_list.append(obj1_k_str)
+			preds_sub_list.append(rel_k_str)
+			preds_sub_list.append(obj2_k_str)
+
+			obj1_ann_str = " ".join(obj_idx_map[x] for x in sample_obj1_k)
+			rel_ann_str = " ".join(rel_idx_map[x] for x in sample_rel_k)
+			obj2_ann_str = " ".join(obj_idx_map[x] for x in sample_obj2_k)
+
+			if opts["data_split"] in ["train", "eval"]:
+				sample_ann_l = batch_ann_t[vid_idx].tolist()
+				ground_truth = f'{sample_ann_l[0]}--{sample_ann_l[1]}--{sample_ann_l[2]}'
+				ground_truth_ann = f'{obj_idx_map[sample_ann_l[0]]}--{rel_idx_map[sample_ann_l[1]]}' \
+				                   f'--{obj_idx_map[sample_ann_l[2]]}'
+
+				preds_ann_list.append([obj1_k_str, rel_k_str, obj2_k_str, obj1_ann_str, rel_ann_str, obj2_ann_str,
+				                       ground_truth, ground_truth_ann])
+			else:
+				preds_ann_list.append([obj1_k_str, rel_k_str, obj2_k_str, obj1_ann_str, rel_ann_str, obj2_ann_str])
+
+		logging.info(f'Inferences generated for video_ids: {video_ids}')
+
+	logging.info(f'Inferences generated for all test data')
+	if opts["data_split"] in ["train", "eval"]:
+		mAPk_scores_str = f'{np.mean(obj1_scores):.3f}, {np.mean(rel_scores):.3f}, {np.mean(obj2_scores):.3f}'
+		logging.info(f'{opts["data_split"]} mAPk_scores: {mAPk_scores_str}')
+		preds_ann_df_cols = ['object1', 'relationship', 'object2', 'obj1_ann', 'rel_ann', 'obj2_ann',
+		                     'ground_truth', 'ground_truth_ann']
+	else:
+		preds_ann_df_cols = ['object1', 'relationship', 'object2', 'obj1_ann', 'rel_ann', 'obj2_ann']
+
+	preds_sub_df = pd.DataFrame(preds_sub_list, columns=['label'])
+	preds_ann_df = pd.DataFrame(preds_ann_list, columns=preds_ann_df_cols)
+	preds_sub_df.index.name = preds_ann_df.index.name = 'ID'
+	preds_sub_df.to_csv('model_run_data/preds_sub.csv', index_label="ID")
+	preds_ann_df.to_csv('model_run_data/preds_ann.csv', index_label="ID")
+
 
 def main(opts):
-	generate_optical_flow_images(opts, mode='test')
 	model = model_provider(opts)
-	vrdataset = VRDataset(img_root=opts["test_dataset_path"], img_root_alternate=os.path.join(opts['optical_flow_test_dataset_path'], opts['optical_flow_type']), len=opts['test_dataset_len'], transform=data_transformations(opts, mode='test'), transform_alternate=data_transformations(opts, mode='default'))
-	dataloader = DataLoader(vrdataset, batch_size=1, shuffle=False, num_workers=opts["num_workers"])
+
+	logging.info(json.dumps(cli_opts, indent=4))
+	logging.info(f'__Python VERSION: {sys.version}')
+	logging.info(f'__pyTorch VERSION: {torch.__version__}')
+
 	if os.path.isfile(opts["trained_model"]):
 		logging.info(f'loading trained model {opts["trained_model"]}')
 		model.load_state_dict(torch.load(opts['trained_model'], map_location=device)['state_dict'])
 		logging.info(f"model: {model}")
 		logging.info(f'loaded trained model {opts["trained_model"]}')
-		preds_res_df = test(dataloader, model)
-		preds_res_df.to_csv('preds.csv', index_label="ID")
 	else:
-		logging.info(f'no trained model found at {opts["trained_model"]}')  
+		raise RuntimeError(f'no trained model found at {opts["trained_model"]}')
+
+	if opts["data_split"] in ["train", "eval"]:
+		opts["test_dataset_path"] = opts["train_dataset_path"]
+
+	vrdataset = VRDataset(
+		vid_root=opts["test_dataset_path"],
+		opf_root=os.path.join(opts['optical_flow_test_dataset_path'], opts['optical_flow_type']),
+		n_samples=opts["test_dataset_size"],
+		transform_vid=data_transformations_vid(opts, mode='test'),
+		transform_opf=data_transformations_opf(opts)
+	)
+	dataloader = DataLoader(vrdataset, batch_size=opts["batch_size"], shuffle=False, num_workers=opts["num_workers"])
+
+	test(dataloader, model, opts)
+	logging.info("Testing completed")
+
 
 if __name__ == '__main__':
-	opts = vars(model_options())
-	main(opts)
+	cli_opts = vars(model_options())
+	main(cli_opts)
