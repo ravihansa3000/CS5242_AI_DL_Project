@@ -43,7 +43,7 @@ def model_options():
 	parser.add_argument('--disable_tf_after_epoch', type=int, default=20,
 	                    help='disable teacher forcing after how many epochs (use only predictions)')
 
-	parser.add_argument('--batch_size', type=int, default=32, help='minibatch size')
+	parser.add_argument('--batch_size', type=int, default=20, help='minibatch size')
 	parser.add_argument('--save_checkpoint_every', type=int, default=1,
 	                    help='how often to save a model checkpoint (in epoch)?')
 	parser.add_argument('--checkpoint_path', type=str, default='./model_run_data',
