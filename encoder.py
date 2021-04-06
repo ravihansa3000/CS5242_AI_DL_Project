@@ -40,7 +40,7 @@ class Encoder(nn.Module):
 		enc_cnn_opf.classifier = self.classifier = nn.Sequential(
 			nn.Linear(512 * 7 * 7, self.dim_opf),
 			nn.ReLU(True),
-			nn.Dropout(p=0.8),
+			nn.Dropout(p=0.5),
 		).to(device)
 		self.enc_cnn_opf = enc_cnn_opf
 

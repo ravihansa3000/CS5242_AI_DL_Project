@@ -50,18 +50,12 @@ def generate_optical_flow_images(opts, data_split):
 		os.mkdir(os.path.join(optical_flow_dataset_path, opts['optical_flow_type']))
 
 	imageDataset = ImageDataset(img_root=dataset_path, n_samples=dataset_size)
-	dataloader = DataLoader(imageDataset, batch_size=1, num_workers=opts["num_workers"])
+	dataloader = DataLoader(imageDataset, batch_size=1)
 
 	for batch_idx, (video_ids, video_frames) in enumerate(dataloader):
 		video_folder_path = os.path.join(optical_flow_dataset_path, opts['optical_flow_type'], video_ids[0])
 
-		if os.path.isdir(video_folder_path):
-			# skip optical flow feature generation
-			if len(os.listdir(video_folder_path)) == len(video_frames):
-				logging.info(
-					f'{opts["optical_flow_type"]} optical flow skip image generation on video_ids: {video_ids}')
-				continue
-		else:
+		if not os.path.isdir(video_folder_path):
 			os.mkdir(video_folder_path)
 
 		of_images = to_optical_flow_images(video_frames, opts)

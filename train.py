@@ -28,11 +28,13 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 	logging.info(f"Starting training at {opts['start_epoch']} epochs and will run for {opts['end_epoch']} epochs "
 	             f"using device: {device}")
 
+	prev_loss = 1000
 	for epoch in range(opts["start_epoch"], opts["end_epoch"]):
 		step = 0
 		true_pos = 0
 		total = 0
 		losses_str = ''
+		total_loss = None
 		optimizer_lr_str = ''
 		mAPk_scores_str = 'N/A'
 
@@ -44,15 +46,13 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			vid_tensor = vid_tensor.to(device)
 			opf_tensor = opf_tensor.to(device)
 
-			# offset <relationship> annotations when generating word embeddings
 			batch_ann_t = torch.LongTensor([
-				[train_ann_dict[item][0], train_ann_dict[item][1] + 35, train_ann_dict[item][2]]
+				[train_ann_dict[item][0], train_ann_dict[item][1], train_ann_dict[item][2]]
 				for item in video_ids
 			]).to(device)
-			output, _ = model(x_vid=vid_tensor, x_opf=opf_tensor, target_variable=batch_ann_t, tf_rate=opts["tf_rate"])
+			output, _ = model(x_vid=vid_tensor, x_opf=opf_tensor, target_y=batch_ann_t, tf_rate=opts["tf_rate"])
 
-			# de-offset <relationship> annotations when calculating loss since linear output has 35 nodes
-			batch_ann_t[:, 1] = torch.sub(batch_ann_t[:, 1], 35)
+			# calculate loss for each element in a batch prediction
 			loss1 = loss_fns[0](output[0], batch_ann_t[:, 0])
 			loss2 = loss_fns[1](output[1], batch_ann_t[:, 1])
 			loss3 = loss_fns[2](output[2], batch_ann_t[:, 2])
@@ -99,7 +99,8 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			fh.write(f'{time_str} | epoch: {epoch}, loss: {losses_str}, optimizer_lr: {optimizer_lr_str}, '
 			         f'accuracy: {epoch_acc:.3f}, mAP@k: {mAPk_scores_str} \n')
 
-		if epoch % opts["save_checkpoint_every"] == 0:
+		# save the model at every checkpointing milestone OR if the loss is lower than in the previous epoch
+		if epoch % opts["save_checkpoint_every"] == 0 or total_loss.item() < prev_loss:
 			save_file_path = os.path.join(opts["checkpoint_path"], f"model_{epoch}.pth")
 			save_checkpoint({
 				'epoch': epoch,
@@ -108,6 +109,7 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			}, filename=save_file_path)
 			logging.info(f"Model saved to {save_file_path}")
 
+		prev_loss = total_loss.item()
 		logging.info(f'Epoch update | epoch: {epoch}, loss: {losses_str}, optimizer_lr: {optimizer_lr_str}, '
 		             f'accuracy: {epoch_acc:.3f}, mAP@k: {mAPk_scores_str}')
 
@@ -170,6 +172,7 @@ if __name__ == '__main__':
 		os.mkdir(cli_opts["checkpoint_path"])
 
 	logging.info(json.dumps(cli_opts, indent=4))
+	logging.info(f'__PID: {os.getpid()}')
 	logging.info(f'__Python VERSION: {sys.version}')
 	logging.info(f'__pyTorch VERSION: {torch.__version__}')
 	with open(opt_json, 'w') as fh:

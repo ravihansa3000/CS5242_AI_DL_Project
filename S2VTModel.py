@@ -34,7 +34,7 @@ class S2VTModel(nn.Module):
 		self.sos_id = sos_id
 
 		# word embeddings lookup table with; + 1 for <sos>
-		self.embedding = nn.Embedding(self.vocab_size, self.dim_word)
+		self.embedding = nn.Embedding(self.vocab_size, self.dim_word).to(device)
 
 		# initialize the encoder cnn
 		self.encoder = Encoder(
@@ -56,19 +56,24 @@ class S2VTModel(nn.Module):
 			elif 'weight' in name:
 				nn.init.xavier_normal_(param)
 
+		# dropout layers for RNN output
+		self.dropout_mods = nn.ModuleList([nn.Dropout(p=0.5).to(device) for _ in range(3)])
+
+		# linear layers that predict each element of a record
 		self.out_lin_mods = nn.ModuleList(
-			[nn.Linear(self.dim_hidden, dim_out).to(device) for dim_out in self.dim_outputs])
+			[nn.Linear(self.dim_hidden, dim_out).to(device) for dim_out in self.dim_outputs]
+		)
 		for m_lin in self.out_lin_mods:
 			torch.nn.init.xavier_uniform_(m_lin.weight)
 
-	def forward(self, x_vid: torch.Tensor, x_opf: torch.Tensor, target_variable=None, tf_rate=0.5, top_k=5):
+	def forward(self, x_vid: torch.Tensor, x_opf: torch.Tensor, target_y=None, tf_rate=0.5, top_k=5):
 		"""
 		:param x_vid: Tensor containing video features of shape (batch_size, n_frames, cnn_input_c, cnn_input_h, cnn_input_w)
 			n_frames is the number of video frames
 
 		:param x_opf: Tensor containing features from optical flow images 
 
-		:param target_variable: target labels of the ground truth annotations of shape (batch_size, max_length)
+		:param target_y: target labels of the ground truth annotations of shape (batch_size, max_length)
 			Each row corresponds to a set of training annotations; (object1, relationship, object2)
 
 		:param tf_rate: Probability for choosing ground truth (teacher forcing) instead of LSTM output
@@ -100,12 +105,13 @@ class S2VTModel(nn.Module):
 
 		if self.training:
 			sos_tensor = Variable(torch.LongTensor([[self.sos_id]] * batch_size)).to(device)
-			target_variable = torch.cat((sos_tensor, target_variable), dim=1)
+			target_y = torch.cat((sos_tensor, target_y), dim=1)
 			for i in range(self.max_length):
+				# offset <relationship> element to avoid conflicts (all target_y labels are 0-indexed)
 				# apply teacher forcing probabilistically
 				# in case of 1st prediction use <sos> token since it's always present in both training and testing
 				if i == 0 or random.random() < tf_rate:
-					current_word_embed = self.embedding(target_variable[:, i])
+					current_word_embed = self.embedding(torch.add(target_y[:, i], 35) if i == 1 else target_y[:, i])
 				else:
 					# use predicted output instead of ground truth
 					logits = F.log_softmax(net_out, dim=1)
@@ -118,8 +124,8 @@ class S2VTModel(nn.Module):
 
 				input1 = torch.cat((input2[:, i, :].unsqueeze(1), current_word_embed.unsqueeze(1)), dim=2)
 				rnn_out, state = self.rnn(input1, state)
-
-				net_out = self.out_lin_mods[i](rnn_out.squeeze(1))
+				dropped_out = self.dropout_mods[i](rnn_out)
+				net_out = self.out_lin_mods[i](dropped_out.squeeze(1))
 				seq_probs.append(net_out)
 		else:
 			current_word_embed = self.embedding(Variable(torch.LongTensor([self.sos_id] * batch_size)).to(device))
@@ -129,7 +135,8 @@ class S2VTModel(nn.Module):
 
 				input1 = torch.cat((input2[:, i, :].unsqueeze(1), current_word_embed.unsqueeze(1)), dim=2)
 				rnn_out, state = self.rnn(input1, state)
-				net_out = self.out_lin_mods[i](rnn_out.squeeze(1))
+				dropped_out = self.dropout_mods[i](rnn_out)
+				net_out = self.out_lin_mods[i](dropped_out.squeeze(1))
 				logits = F.log_softmax(net_out, dim=1)
 				seq_probs.append(logits)
 
