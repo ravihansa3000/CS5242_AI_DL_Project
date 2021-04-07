@@ -12,7 +12,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class S2VTModel(nn.Module):
 	def __init__(self, vocab_size=117 + 1, dim_hidden=1000, dim_word=500, max_len=3, dim_vid=500, dim_opf=500,
-	             sos_id=117, n_layers=1, rnn_cell='lstm', input_dropout_p=0.4, rnn_dropout_p=0.5):
+	             sos_id=117, n_layers=1, rnn_cell='lstm', input_dropout_p=0.5, rnn_dropout_p=0.5):
 		super(S2VTModel, self).__init__()
 		if rnn_cell.lower() == 'lstm':
 			self.rnn_cell = nn.LSTM
@@ -65,7 +65,7 @@ class S2VTModel(nn.Module):
 				nn.init.xavier_normal_(param)
 
 		# dropout for RNN output
-		self.output_dropout = nn.Dropout(p=0.2).to(device)
+		self.output_dropout = nn.Dropout(p=0.0).to(device)
 
 		# linear layers that predict each element of a record
 		self.out_lin_mods = nn.ModuleList(

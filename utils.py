@@ -119,10 +119,10 @@ def mapk(actual, predicted, k=5):
 	return np.mean([apk(a, p, k) for a, p in zip(actual, predicted)])
 
 
-def calculate_mapk_batch(topk_preds, annotations_t, k=5):
+def calculate_mapk_batch(topk_preds, annotations, k=5):
 	mAPk_scores = []
 	for i in range(3):
-		actual_list = annotations_t[:, i].tolist()
+		actual_list = annotations[:, i]
 		predicted_list = topk_preds[i].tolist()
 		mAPk = mapk(actual_list, predicted_list, k)
 		mAPk_scores.append(mAPk)
@@ -137,11 +137,9 @@ def calculate_training_mAPk(dataloader, model, train_ann_dict, opts=None):
 	for batch_idx, (video_ids, vid_tensor, opf_tensor) in enumerate(dataloader):
 		vid_tensor = vid_tensor.to(device)
 		opf_tensor = opf_tensor.to(device)
-
-		batch_ann_t = torch.LongTensor([
-			[train_ann_dict[item][0], train_ann_dict[item][1], train_ann_dict[item][2]]
-			for item in video_ids
-		]).to(device)
+		batch_ann_t = [
+			[train_ann_dict[item][0], train_ann_dict[item][1], train_ann_dict[item][2]] for item in video_ids
+		]
 
 		model.eval()
 		with torch.no_grad():

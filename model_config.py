@@ -15,7 +15,7 @@ def model_options():
 	                    help="load trained model for testing")
 	parser.add_argument("--max_len", type=int, default=3, help='max length of captions(containing <sos>)')
 	parser.add_argument('--num_layers', type=int, default=1, help='number of layers in the RNN')
-	parser.add_argument('--input_dropout_p', type=float, default=0.4, help='strength of dropout for RNN input')
+	parser.add_argument('--input_dropout_p', type=float, default=0.5, help='strength of dropout for RNN input')
 	parser.add_argument('--rnn_type', type=str, default='lstm', help='lstm or gru')
 	parser.add_argument('--rnn_dropout_p', type=float, default=0.5, help='strength of dropout for RNN layers')
 

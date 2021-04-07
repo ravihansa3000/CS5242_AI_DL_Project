@@ -1,5 +1,4 @@
 import json
-import random
 import sys
 import time
 
@@ -12,6 +11,7 @@ from dataset import VRDataset
 from model_config import model_provider, data_transformations_vid, data_transformations_opf
 from optical_flow import *
 from utils import save_checkpoint
+from eval import eval
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 logging.basicConfig(
@@ -28,13 +28,12 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 	logging.info(f"Starting training at {opts['start_epoch']} epochs and will run for {opts['end_epoch']} epochs "
 	             f"using device: {device}")
 
-	prev_loss = 1000
 	for epoch in range(opts["start_epoch"], opts["end_epoch"]):
+		epoch_count = epoch + 1
 		step = 0
 		true_pos = 0
 		total = 0
 		losses_str = ''
-		total_loss = None
 		optimizer_lr_str = ''
 		mAPk_scores_str = 'N/A'
 
@@ -79,7 +78,7 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 				total += total_per_step
 				step_acc = true_pos_per_step / total_per_step * 100
 
-			logging.info(f"Step update | epoch: {epoch}, batch_idx: {batch_idx}, step: {step}, "
+			logging.info(f"Step update | epoch_count: {epoch_count}, batch_idx: {batch_idx}, step: {step}, "
 			             f"loss: {losses_str}, step_acc: {step_acc} | optimizer_lr: {optimizer_lr_str}")
 			step += 1
 
@@ -87,8 +86,12 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 		lr_scheduler.step()
 		epoch_acc = true_pos / total * 100
 
-		# calculate overall MAP@k
-		if epoch % opts["mAP_k_print_interval"] == 0:
+		# calculate overall MAP@k for eval data
+		if epoch_count % 5 == 0:
+			eval(dataloader, model, opts)
+
+		# calculate overall MAP@k for train data
+		if epoch_count % opts["mAP_k_print_interval"] == 0:
 			obj1_score, rel_score, obj2_score = utils.calculate_training_mAPk(dataloader, model, train_ann_dict, opts)
 			mAPk_scores_str = f'{obj1_score:.3f}, {rel_score:.3f}, {obj2_score:.3f}'
 
@@ -96,12 +99,12 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 		model_info_path = os.path.join(opts["checkpoint_path"], 'score.txt')
 		with open(model_info_path, 'a') as fh:
 			time_str = time.strftime("%Y-%m-%d %H:%M:%S")
-			fh.write(f'{time_str} | epoch: {epoch}, loss: {losses_str}, optimizer_lr: {optimizer_lr_str}, '
+			fh.write(f'{time_str} | epoch_count: {epoch_count}, loss: {losses_str}, optimizer_lr: {optimizer_lr_str}, '
 			         f'accuracy: {epoch_acc:.3f}, mAP@k: {mAPk_scores_str} \n')
 
 		# save the model at every checkpointing milestone OR if the loss is lower than in the previous epoch
-		if epoch % opts["save_checkpoint_every"] == 0 or total_loss.item() < prev_loss:
-			save_file_path = os.path.join(opts["checkpoint_path"], f"model_{epoch}.pth")
+		if epoch_count % opts["save_checkpoint_every"] == 0:
+			save_file_path = os.path.join(opts["checkpoint_path"], f"model_{epoch_count}.pth")
 			save_checkpoint({
 				'epoch': epoch,
 				'state_dict': model.state_dict(),
@@ -109,9 +112,9 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 			}, filename=save_file_path)
 			logging.info(f"Model saved to {save_file_path}")
 
-		prev_loss = total_loss.item()
-		logging.info(f'Epoch update | epoch: {epoch}, loss: {losses_str}, optimizer_lr: {optimizer_lr_str}, '
-		             f'accuracy: {epoch_acc:.3f}, mAP@k: {mAPk_scores_str}')
+		logging.info(
+			f'Epoch update | epoch_count: {epoch_count}, loss: {losses_str}, optimizer_lr: {optimizer_lr_str}, '
+			f'accuracy: {epoch_acc:.3f}, mAP@k: {mAPk_scores_str}')
 
 	return model
 
