@@ -7,5 +7,4 @@ def to_optical_flow_images(video_frames, opts):
 	for frame_idx in range(len(video_frames)):
 		video_frame = video_frames[frame_idx].squeeze().numpy()
 		of_images.append(of.apply(video_frame))
-		of.set1stFrame(video_frame)
 	return of_images
