@@ -57,7 +57,7 @@ class S2VTModel(nn.Module):
 
 		self.out_lin_mods = nn.ModuleList([nn.Linear(self.dim_hidden, dim_out).to(device) for dim_out in self.dim_outputs])
 		self.dropout = nn.ModuleList([nn.Dropout(p=0.5) for _ in range(3)])
-		self.attention = torchnlp.nn.Attention(dim_hidden, attention_type='dot')
+		self.attention = torchnlp.nn.Attention(dim_hidden)
 		for m_lin in self.out_lin_mods:
 			torch.nn.init.xavier_uniform_(m_lin.weight)
 
@@ -108,7 +108,7 @@ class S2VTModel(nn.Module):
 			sos_tensor = Variable(torch.LongTensor([[self.sos_id]] * batch_size)).to(device)
 			target_variable = torch.cat((sos_tensor, target_variable), dim=1)
 			for i in range(self.max_length):
-				if tf_mode or i == 0:
+				if not tf_mode or i == 0:
 					current_word_embed = self.embedding(target_variable[:, i])
 				else:
 					# use predicted output instead of ground truth
