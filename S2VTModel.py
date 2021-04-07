@@ -57,7 +57,7 @@ class S2VTModel(nn.Module):
 
 		self.out_lin_mods = nn.ModuleList([nn.Linear(self.dim_hidden, dim_out).to(device) for dim_out in self.dim_outputs])
 		self.dropout = nn.ModuleList([nn.Dropout(p=0.5) for _ in range(3)])
-		self.attention = torchnlp.nn.Attention(dim_hidden)
+
 		for m_lin in self.out_lin_mods:
 			torch.nn.init.xavier_uniform_(m_lin.weight)
 
@@ -81,6 +81,7 @@ class S2VTModel(nn.Module):
 		enc_out = self.encoder(x)
 
 		input1 = enc_out[:, :30, :]  # input1: (batch_size, 30, dim_hidden)
+		input2 = enc_out[:, 30:, :]  # input2: (batch_size, 3, dim_word)
 
 		# https://github.com/pytorch/pytorch/issues/3920
 		# paddings to be used for the 2nd layer
@@ -99,10 +100,6 @@ class S2VTModel(nn.Module):
 
 		# By this point we have already fed input features (of 30 frames) to 1st layer of LSTM and padded concatenated
 		# inputs to 2nd layer of LSTM. Remaining 3 steps will be performed using word embeddings
-		attended_features, _ = self.attention(state[0].permute(1, 0, 2), input1) # batch_size, 1, dim_hidden
-		assert (attended_features.shape[0] == batch_size and \
-			attended_features.shape[1] == 1 and \
-			attended_features.shape[2] == self.dim_hidden)
 
 		if self.training:
 			sos_tensor = Variable(torch.LongTensor([[self.sos_id]] * batch_size)).to(device)
@@ -120,14 +117,8 @@ class S2VTModel(nn.Module):
 
 				self.rnn.flatten_parameters()
 
-				inp = torch.cat((attended_features, current_word_embed.unsqueeze(1)), dim=2)
+				inp = torch.cat((input2[:, i, :].unsqueeze(1), current_word_embed.unsqueeze(1)), dim=2)
 				rnn_out, state = self.rnn(inp, state)
-
-
-				attended_features, _ = self.attention(state[0].permute(1, 0, 2), input1) # batch_size, 1, dim_hidden
-				assert (attended_features.shape[0] == batch_size and \
-					attended_features.shape[1] == 1 and \
-					attended_features.shape[2] == self.dim_hidden)
 
 				rnn_out = self.dropout[i](rnn_out)
 				net_out = self.out_lin_mods[i](rnn_out.squeeze(1))
@@ -138,13 +129,8 @@ class S2VTModel(nn.Module):
 				# optimize for GPU (applicable only when CUDA/GPU capability is present in the system)
 				self.rnn.flatten_parameters()
 
-				inp = torch.cat((attended_features, current_word_embed.unsqueeze(1)), dim=2)
+				inp = torch.cat((input2[:, i, :].unsqueeze(1), current_word_embed.unsqueeze(1)), dim=2)
 				rnn_out, state = self.rnn(inp, state)
-
-				attended_features, _ = self.attention(state[0].permute(1, 0, 2), input1) # batch_size, 1, dim_hidden
-				assert (attended_features.shape[0] == batch_size and \
-					attended_features.shape[1] == 1 and \
-					attended_features.shape[2] == self.dim_hidden)
 
 				rnn_out = self.dropout[i](rnn_out)
 				net_out = self.out_lin_mods[i](rnn_out.squeeze(1))
