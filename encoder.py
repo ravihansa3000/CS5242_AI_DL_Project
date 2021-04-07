@@ -11,7 +11,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class Encoder(nn.Module):
-	def __init__(self, dim_vid=500, dim_opf=500, dim_hidden=1000, rnn_cell=nn.LSTM, rnn_dropout_p=0):
+	def __init__(self, dim_vid=500, dim_opf=500, dim_hidden=1000, rnn_cell=nn.LSTM,
+	             n_layers=1, rnn_dropout_p=0.5):
 		"""Load the pretrained CNNs and replace top fc layer."""
 		super(Encoder, self).__init__()
 
@@ -26,9 +27,12 @@ class Encoder(nn.Module):
 			param.requires_grad = False
 
 		enc_cnn_img.classifier = nn.Sequential(
-			nn.Linear(512 * 7 * 7, self.dim_vid),
+			nn.Linear(512 * 7 * 7, 4096),
 			nn.ReLU(True),
-			nn.Dropout(p=0.5),
+			nn.Dropout(p=0.8),
+			nn.Linear(4096, self.dim_vid),
+			nn.ReLU(True),
+			nn.Dropout(p=0.7),
 		).to(device)
 		self.enc_cnn_img = enc_cnn_img
 
@@ -38,9 +42,12 @@ class Encoder(nn.Module):
 			param.requires_grad = False
 
 		enc_cnn_opf.classifier = self.classifier = nn.Sequential(
-			nn.Linear(512 * 7 * 7, self.dim_opf),
+			nn.Linear(512 * 7 * 7, 4096),
 			nn.ReLU(True),
-			nn.Dropout(p=0.5),
+			nn.Dropout(p=0.8),
+			nn.Linear(4096, self.dim_opf),
+			nn.ReLU(True),
+			nn.Dropout(p=0.7),
 		).to(device)
 		self.enc_cnn_opf = enc_cnn_opf
 
@@ -48,7 +55,7 @@ class Encoder(nn.Module):
 		self.rnn = rnn_cell(
 			self.dim_vid + self.dim_opf,
 			self.dim_hidden,
-			1,
+			n_layers,
 			batch_first=True,
 			dropout=rnn_dropout_p,
 			bidirectional=False
@@ -84,9 +91,9 @@ class Encoder(nn.Module):
 		padding_frames = Variable(
 			torch.empty(batch_size, 3, self.dim_vid + self.dim_opf, dtype=vid_feats.dtype)
 		).zero_().to(device)
-
 		rnn_input = torch.cat((combined_feats, padding_frames), dim=1)
-		state = init_hidden(batch_size, 1, self.dim_hidden)
+
+		state = None
 		output, _ = self.rnn(rnn_input, state)  # batch_size, n_frames + 3, dim_hidden
 		return output
 

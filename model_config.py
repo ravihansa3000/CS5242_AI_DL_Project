@@ -15,15 +15,12 @@ def model_options():
 	                    help="load trained model for testing")
 	parser.add_argument("--max_len", type=int, default=3, help='max length of captions(containing <sos>)')
 	parser.add_argument('--num_layers', type=int, default=1, help='number of layers in the RNN')
-	parser.add_argument('--input_dropout_p', type=float, default=0.2,
-	                    help='strength of dropout in the Language Model RNN')
+	parser.add_argument('--input_dropout_p', type=float, default=0.4, help='strength of dropout for RNN input')
 	parser.add_argument('--rnn_type', type=str, default='lstm', help='lstm or gru')
-	parser.add_argument('--rnn_dropout_p', type=float, default=0,
-	                    help='strength of dropout in the Language Model RNN')
+	parser.add_argument('--rnn_dropout_p', type=float, default=0.5, help='strength of dropout for RNN layers')
 
 	parser.add_argument('--dim_hidden', type=int, default=1000, help='size of the rnn hidden layer')
-	parser.add_argument('--dim_word', type=int, default=500,
-	                    help='the encoding size of each token in the vocabulary, and the video.')
+	parser.add_argument('--dim_word', type=int, default=500, help='the encoding size of each token in the vocabulary')
 	parser.add_argument('--dim_vid', type=int, default=500, help='dim of features of video frames')
 	parser.add_argument('--dim_opf', type=int, default=500, help='dim of features of optical flow frames')
 	parser.add_argument('--vocab_size', type=int, default=117 + 1, help='vocabulary size')
@@ -32,14 +29,12 @@ def model_options():
 	parser.add_argument('--learning_rate_decay_every', type=int, default=5,
 	                    help='every how many iterations thereafter to drop LR?(in epoch)')
 	parser.add_argument('--learning_rate_decay_rate', type=float, default=0.9)
-	parser.add_argument('--weight_decay', type=float, default=1e-3,
-	                    help='weight_decay. strength of weight regularization')
-	parser.add_argument('--grad_clip', type=float, default=1, help='clip gradients normalized at this value')
+	parser.add_argument('--weight_decay', type=float, default=1e-3, help='strength of weight regularization')
+	parser.add_argument('--grad_clip', type=float, default=1.5, help='clip gradients normalized at this value')
 
 	parser.add_argument('--start_epoch', type=int, default=0, help='starting epoch number (useful in restarts)')
-	parser.add_argument('--end_epoch', type=int, default=100, help='ending epoch number')
-	parser.add_argument('--tf_rate', type=float, default=0.5,
-	                    help='Probability for teacher forcing')
+	parser.add_argument('--end_epoch', type=int, default=200, help='ending epoch number')
+	parser.add_argument('--tf_rate', type=float, default=0.5, help='Probability for teacher forcing')
 
 	parser.add_argument('--batch_size', type=int, default=32, help='minibatch size')
 	parser.add_argument('--save_checkpoint_every', type=int, default=5,
@@ -83,9 +78,10 @@ def model_provider(opts):
 			max_len=opts["max_len"],
 			dim_vid=opts["dim_vid"],
 			dim_opf=opts["dim_opf"],
-			n_layers=opts['num_layers'],
 			rnn_cell=opts['rnn_type'],
-			rnn_dropout_p=opts["rnn_dropout_p"]
+			n_layers=opts['num_layers'],
+			rnn_dropout_p=opts["rnn_dropout_p"],
+			input_dropout_p=opts["input_dropout_p"],
 		).to(device)
 	return model
 

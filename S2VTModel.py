@@ -12,7 +12,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class S2VTModel(nn.Module):
 	def __init__(self, vocab_size=117 + 1, dim_hidden=1000, dim_word=500, max_len=3, dim_vid=500, dim_opf=500,
-	             sos_id=117, n_layers=1, rnn_cell='lstm', rnn_dropout_p=0.2):
+	             sos_id=117, n_layers=1, rnn_cell='lstm', input_dropout_p=0.4, rnn_dropout_p=0.5):
 		super(S2VTModel, self).__init__()
 		if rnn_cell.lower() == 'lstm':
 			self.rnn_cell = nn.LSTM
@@ -38,8 +38,16 @@ class S2VTModel(nn.Module):
 
 		# initialize the encoder cnn
 		self.encoder = Encoder(
-			dim_vid=self.dim_vid, dim_opf=self.dim_opf, dim_hidden=dim_hidden, rnn_cell=self.rnn_cell
+			dim_vid=self.dim_vid,
+			dim_opf=self.dim_opf,
+			dim_hidden=dim_hidden,
+			rnn_cell=self.rnn_cell,
+			n_layers=n_layers,
+			rnn_dropout_p=rnn_dropout_p,
 		).to(device)
+
+		# dropout for RNN input
+		self.input_dropout = nn.Dropout(p=input_dropout_p).to(device)
 
 		self.rnn = self.rnn_cell(
 			self.dim_hidden + self.dim_word,
@@ -56,8 +64,8 @@ class S2VTModel(nn.Module):
 			elif 'weight' in name:
 				nn.init.xavier_normal_(param)
 
-		# dropout layers for RNN output
-		self.dropout_mods = nn.ModuleList([nn.Dropout(p=0.5).to(device) for _ in range(3)])
+		# dropout for RNN output
+		self.output_dropout = nn.Dropout(p=0.2).to(device)
 
 		# linear layers that predict each element of a record
 		self.out_lin_mods = nn.ModuleList(
@@ -85,19 +93,19 @@ class S2VTModel(nn.Module):
 		batch_size = x_vid.shape[0]
 		enc_out = self.encoder(x_vid, x_opf)
 
-		input1 = enc_out[:, :30, :]  # input1: (batch_size, 30, dim_vid + dim_opf)
-		input2 = enc_out[:, 30:, :]  # input2: (batch_size, 3, dim_word)
+		input1 = enc_out[:, :30, :]  # input1: (batch_size, 30, dim_hidden)
+		input2 = enc_out[:, 30:, :]  # input2: (batch_size, 3, dim_hidden)
 
 		# https://github.com/pytorch/pytorch/issues/3920
 		# paddings to be used for the 2nd layer
 		padding_words = Variable(torch.empty(batch_size, 30, self.dim_word, dtype=x_vid.dtype)).zero_().to(device)
 
 		# concatenate paddings (for the 2nd layer) with output from the 1st layer
-		input1 = torch.cat((input1, padding_words), dim=2)
+		input1 = torch.cat((input1, padding_words), dim=2)  # input1: (batch_size, 30, dim_hidden + dim_word)
 
 		# feed concatenated output from 1st layer to the 2nd layer
-		state = init_hidden(batch_size, 1, self.dim_hidden)
-		rnn_out, state = self.rnn(input1, state)  # (batch_size, 33, dim_word)
+		state = None
+		rnn_out, state = self.rnn(input1, state)  # rnn_out: (batch_size, 30, dim_hidden)
 
 		seq_probs = []
 		seq_k_preds = []
@@ -120,23 +128,32 @@ class S2VTModel(nn.Module):
 					# offset embeddings for <relationship> entity type since predictions are 0-indexed
 					current_word_embed = self.embedding(torch.add(top_preds, 35) if i == 1 else top_preds)
 
-				self.rnn.flatten_parameters()
+				self.rnn.flatten_parameters()  # optimize for GPU
 
-				input1 = torch.cat((input2[:, i, :].unsqueeze(1), current_word_embed.unsqueeze(1)), dim=2)
-				rnn_out, state = self.rnn(input1, state)
-				dropped_out = self.dropout_mods[i](rnn_out)
-				net_out = self.out_lin_mods[i](dropped_out.squeeze(1))
+				input_i = torch.cat((input2[:, i, :].unsqueeze(1), current_word_embed.unsqueeze(1)), dim=2)
+				input_i = self.input_dropout(input_i.view(-1, self.dim_hidden + self.dim_word))
+				input_i = input_i.view(batch_size, 1, self.dim_hidden + self.dim_word)
+				rnn_out, state = self.rnn(input_i, state)
+
+				dropped_out = self.output_dropout(rnn_out.view(-1, self.dim_hidden))
+				dropped_out = dropped_out.view(batch_size, self.dim_hidden)
+
+				net_out = self.out_lin_mods[i](dropped_out)
 				seq_probs.append(net_out)
 		else:
 			current_word_embed = self.embedding(Variable(torch.LongTensor([self.sos_id] * batch_size)).to(device))
 			for i in range(self.max_length):
-				# optimize for GPU (applicable only when CUDA/GPU capability is present in the system)
-				self.rnn.flatten_parameters()
+				self.rnn.flatten_parameters()  # optimize for GPU
 
-				input1 = torch.cat((input2[:, i, :].unsqueeze(1), current_word_embed.unsqueeze(1)), dim=2)
-				rnn_out, state = self.rnn(input1, state)
-				dropped_out = self.dropout_mods[i](rnn_out)
-				net_out = self.out_lin_mods[i](dropped_out.squeeze(1))
+				input_i = torch.cat((input2[:, i, :].unsqueeze(1), current_word_embed.unsqueeze(1)), dim=2)
+				input_i = self.input_dropout(input_i.view(-1, self.dim_hidden + self.dim_word))
+				input_i = input_i.view(batch_size, 1, self.dim_hidden + self.dim_word)
+				rnn_out, state = self.rnn(input_i, state)
+
+				dropped_out = self.output_dropout(rnn_out.view(-1, self.dim_hidden))
+				dropped_out = dropped_out.view(batch_size, self.dim_hidden)
+
+				net_out = self.out_lin_mods[i](dropped_out)
 				logits = F.log_softmax(net_out, dim=1)
 				seq_probs.append(logits)
 
