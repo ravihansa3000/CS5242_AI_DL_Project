@@ -35,6 +35,11 @@ class Encoder(nn.Module):
 			elif 'weight' in name:
 				nn.init.xavier_normal_(param)
 
+	def train(self):
+		super().train()
+		self.resnet50.eval()
+		self.resnet50.fc.train()
+
 	def forward(self, x):
 		"""Convert a batch of videos into embeddings and feed them into the encoder RNN"""
 
