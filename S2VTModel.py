@@ -11,8 +11,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class S2VTModel(nn.Module):
-	def __init__(self, vocab_size=117 + 1, dim_hidden=1000, dim_word=500, max_len=3, dim_vid=500, dim_opf=500,
-	             sos_id=117, n_layers=1, rnn_cell='lstm', input_dropout_p=0.5, rnn_dropout_p=0.5):
+	def __init__(self, vocab_size=117 + 1, dim_hidden=250, dim_word=250, max_len=3, dim_vid=500, dim_opf=500,
+				 dim_r3d=500, sos_id=117, n_layers=1, rnn_cell='lstm', input_dropout_p=0.5, rnn_dropout_p=0.5):
 		super(S2VTModel, self).__init__()
 		if rnn_cell.lower() == 'lstm':
 			self.rnn_cell = nn.LSTM
@@ -21,6 +21,7 @@ class S2VTModel(nn.Module):
 
 		self.dim_vid = dim_vid  # features of video frames are embedded to a 500 dimensional space
 		self.dim_opf = dim_opf  # features of optical flow frames are embedded to a 500 dimensional space
+		self.dim_r3d = dim_r3d
 		self.dim_outputs = [35, 82, 35]  # objects: 35, relationships: 82; <object1>,<relationship>,<object2>
 		self.vocab_size = vocab_size  # number of total embeddings
 		self.dim_hidden = dim_hidden  # LSTM hidden feature dimension
@@ -40,6 +41,7 @@ class S2VTModel(nn.Module):
 		self.encoder = Encoder(
 			dim_vid=self.dim_vid,
 			dim_opf=self.dim_opf,
+			dim_r3d=self.dim_r3d,
 			dim_hidden=dim_hidden,
 			rnn_cell=self.rnn_cell,
 			n_layers=n_layers,
@@ -54,7 +56,8 @@ class S2VTModel(nn.Module):
 			self.dim_hidden,
 			n_layers,
 			batch_first=True,
-			dropout=rnn_dropout_p
+			dropout=rnn_dropout_p,
+			bidirectional=True,
 		).to(device)
 
 		# initialize RNN weights using Xavier method
@@ -65,11 +68,13 @@ class S2VTModel(nn.Module):
 				nn.init.xavier_normal_(param)
 
 		# dropout for RNN output
-		self.output_dropout = nn.Dropout(p=0.0).to(device)
+		self.output_dropout = nn.Dropout(p=0.1).to(device)
 
 		# linear layers that predict each element of a record
+		self.dim_rnn_out = 2 * self.dim_hidden if self.rnn.bidirectional else self.dim_hidden
+		self.dim_lin_in = [self.dim_rnn_out, self.dim_rnn_out, self.dim_rnn_out]
 		self.out_lin_mods = nn.ModuleList(
-			[nn.Linear(self.dim_hidden, dim_out).to(device) for dim_out in self.dim_outputs]
+			[nn.Linear(item[0], item[1]).to(device) for item in zip(self.dim_lin_in, self.dim_outputs)]
 		)
 		for m_lin in self.out_lin_mods:
 			torch.nn.init.xavier_uniform_(m_lin.weight)
@@ -79,7 +84,7 @@ class S2VTModel(nn.Module):
 		:param x_vid: Tensor containing video features of shape (batch_size, n_frames, cnn_input_c, cnn_input_h, cnn_input_w)
 			n_frames is the number of video frames
 
-		:param x_opf: Tensor containing features from optical flow images 
+		:param x_opf: Tensor containing features from optical flow images
 
 		:param target_y: target labels of the ground truth annotations of shape (batch_size, max_length)
 			Each row corresponds to a set of training annotations; (object1, relationship, object2)
@@ -91,7 +96,7 @@ class S2VTModel(nn.Module):
 		:return:
 		"""
 		batch_size = x_vid.shape[0]
-		enc_out = self.encoder(x_vid, x_opf)
+		enc_out, r3d_out = self.encoder(x_vid, x_opf)
 
 		input1 = enc_out[:, :30, :]  # input1: (batch_size, 30, dim_hidden)
 		input2 = enc_out[:, 30:, :]  # input2: (batch_size, 3, dim_hidden)
@@ -135,8 +140,13 @@ class S2VTModel(nn.Module):
 				input_i = input_i.view(batch_size, 1, self.dim_hidden + self.dim_word)
 				rnn_out, state = self.rnn(input_i, state)
 
-				dropped_out = self.output_dropout(rnn_out.view(-1, self.dim_hidden))
-				dropped_out = dropped_out.view(batch_size, self.dim_hidden)
+				dropped_out = self.output_dropout(rnn_out.view(-1, self.dim_rnn_out))
+				dropped_out = dropped_out.view(batch_size, self.dim_rnn_out)
+
+				# concat R3D features for <relationship> training
+				# if i == 1:
+				#     cnn_r3d_combined = torch.cat((dropped_out, r3d_out), dim=1)
+				#     net_out = self.out_lin_mods[i](r3d_out)
 
 				net_out = self.out_lin_mods[i](dropped_out)
 				seq_probs.append(net_out)
@@ -150,8 +160,13 @@ class S2VTModel(nn.Module):
 				input_i = input_i.view(batch_size, 1, self.dim_hidden + self.dim_word)
 				rnn_out, state = self.rnn(input_i, state)
 
-				dropped_out = self.output_dropout(rnn_out.view(-1, self.dim_hidden))
-				dropped_out = dropped_out.view(batch_size, self.dim_hidden)
+				dropped_out = self.output_dropout(rnn_out.view(-1, self.dim_rnn_out))
+				dropped_out = dropped_out.view(batch_size, self.dim_rnn_out)
+
+				# concat R3D features for <relationship> prediction
+				# if i == 1:
+				#     cnn_r3d_combined = torch.cat((dropped_out, r3d_out), dim=1)
+				#     net_out = self.out_lin_mods[i](cnn_r3d_combined)
 
 				net_out = self.out_lin_mods[i](dropped_out)
 				logits = F.log_softmax(net_out, dim=1)

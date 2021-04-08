@@ -11,7 +11,7 @@ from dataset import VRDataset
 from model_config import model_provider, data_transformations_vid, data_transformations_opf
 from optical_flow import *
 from utils import save_checkpoint
-from eval import eval
+from eval import eval, get_eval_dataloader
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 logging.basicConfig(
@@ -20,13 +20,13 @@ logging.basicConfig(
 	datefmt='%Y-%m-%d %H:%M:%S')
 
 
-def train(dataloader, model, optimizer, lr_scheduler, opts):
+def train(dataloader, model, optimizer, lr_scheduler, eval_dataloader, opts):
 	loss_fns = [torch.nn.CrossEntropyLoss().to(device) for _ in range(3)]
 	with open(opts["train_annotation_path"]) as f:
 		train_ann_dict = json.load(f)
 
 	logging.info(f"Starting training at {opts['start_epoch']} epochs and will run for {opts['end_epoch']} epochs "
-	             f"using device: {device}")
+				 f"using device: {device}")
 
 	for epoch in range(opts["start_epoch"], opts["end_epoch"]):
 		epoch_count = epoch + 1
@@ -79,7 +79,7 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 				step_acc = true_pos_per_step / total_per_step * 100
 
 			logging.info(f"Step update | epoch_count: {epoch_count}, batch_idx: {batch_idx}, step: {step}, "
-			             f"loss: {losses_str}, step_acc: {step_acc} | optimizer_lr: {optimizer_lr_str}")
+						 f"loss: {losses_str}, step_acc: {step_acc} | optimizer_lr: {optimizer_lr_str}")
 			step += 1
 
 		# calculate per epoch
@@ -87,11 +87,11 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 		epoch_acc = true_pos / total * 100
 
 		# calculate overall MAP@k for eval data
-		if epoch_count % 5 == 0:
-			eval(dataloader, model, opts)
+		if epoch_count % opts["eval_print_interval"] == 0:
+			eval(eval_dataloader, model, opts)
 
 		# calculate overall MAP@k for train data
-		if epoch_count % opts["mAP_k_print_interval"] == 0:
+		if epoch_count % opts["train_print_interval"] == 0:
 			obj1_score, rel_score, obj2_score = utils.calculate_training_mAPk(dataloader, model, train_ann_dict, opts)
 			mAPk_scores_str = f'{obj1_score:.3f}, {rel_score:.3f}, {obj2_score:.3f}'
 
@@ -100,7 +100,7 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 		with open(model_info_path, 'a') as fh:
 			time_str = time.strftime("%Y-%m-%d %H:%M:%S")
 			fh.write(f'{time_str} | epoch_count: {epoch_count}, loss: {losses_str}, optimizer_lr: {optimizer_lr_str}, '
-			         f'accuracy: {epoch_acc:.3f}, mAP@k: {mAPk_scores_str} \n')
+					 f'accuracy: {epoch_acc:.3f}, mAP@k: {mAPk_scores_str} \n')
 
 		# save the model at every checkpointing milestone OR if the loss is lower than in the previous epoch
 		if epoch_count % opts["save_checkpoint_every"] == 0:
@@ -163,7 +163,8 @@ def main(opts):
 		num_workers=opts["num_workers"]
 	)
 
-	train(dataloader, model, optimizer, lr_scheduler, opts)
+	eval_dataloader = get_eval_dataloader(opts)
+	train(dataloader, model, optimizer, lr_scheduler, eval_dataloader, opts)
 	logging.info("Training completed")
 
 

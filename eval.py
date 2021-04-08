@@ -14,6 +14,7 @@ logging.basicConfig(
 	format='%(asctime)s %(levelname)-8s %(message)s',
 	level=logging.INFO,
 	datefmt='%Y-%m-%d %H:%M:%S')
+np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
 
 
 def get_label_from_map(label_map, indices):
@@ -83,8 +84,8 @@ def eval(dataloader, model, opts):
 			sample_ann_l = batch_ann_arr[vid_idx]
 			ground_truth = f'{sample_ann_l[0]} | {sample_ann_l[1]} | {sample_ann_l[2]}'
 			ground_truth_ann = f'{get_label_from_map(obj_idx_map, sample_ann_l[0])} | ' \
-			                   f'{get_label_from_map(rel_idx_map, sample_ann_l[1])} | ' \
-			                   f'{get_label_from_map(obj_idx_map, sample_ann_l[2])}'
+							   f'{get_label_from_map(rel_idx_map, sample_ann_l[1])} | ' \
+							   f'{get_label_from_map(obj_idx_map, sample_ann_l[2])}'
 
 			preds_ann_list.append([
 				obj1_k_str, rel_k_str, obj2_k_str,
@@ -107,6 +108,18 @@ def eval(dataloader, model, opts):
 	preds_ann_df.to_csv('model_run_data/eval_preds_ann.csv', index_label="ID")
 
 
+def get_eval_dataloader(opts):
+	vrdataset = VRDataset(
+		vid_root=opts["test_dataset_path"],
+		opf_root=os.path.join(opts['optical_flow_test_dataset_path'], opts['optical_flow_type']),
+		n_samples=opts["test_dataset_size"],
+		transform_vid=data_transformations_vid(opts, mode='test'),
+		transform_opf=data_transformations_opf(opts)
+	)
+	dataloader = DataLoader(vrdataset, batch_size=opts["batch_size"], shuffle=False, num_workers=opts["num_workers"])
+	return dataloader
+
+
 def main(opts):
 	model = model_provider(opts)
 
@@ -122,15 +135,7 @@ def main(opts):
 	else:
 		raise RuntimeError(f'no trained model found at {opts["trained_model"]}')
 
-	vrdataset = VRDataset(
-		vid_root=opts["test_dataset_path"],
-		opf_root=os.path.join(opts['optical_flow_test_dataset_path'], opts['optical_flow_type']),
-		n_samples=opts["test_dataset_size"],
-		transform_vid=data_transformations_vid(opts, mode='test'),
-		transform_opf=data_transformations_opf(opts)
-	)
-	dataloader = DataLoader(vrdataset, batch_size=opts["batch_size"], shuffle=False, num_workers=opts["num_workers"])
-
+	dataloader = get_eval_dataloader(opts)
 	eval(dataloader, model, opts)
 	logging.info("Evaluation completed")
 

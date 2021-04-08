@@ -12,22 +12,23 @@ def model_options():
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--model', type=str, default='S2VTModel', help="with model to use")
 	parser.add_argument('--trained_model', type=str, default='model_run_data/trained_model.pth',
-	                    help="load trained model for testing")
+						help="load trained model for testing")
 	parser.add_argument("--max_len", type=int, default=3, help='max length of captions(containing <sos>)')
 	parser.add_argument('--num_layers', type=int, default=1, help='number of layers in the RNN')
-	parser.add_argument('--input_dropout_p', type=float, default=0.5, help='strength of dropout for RNN input')
+	parser.add_argument('--input_dropout_p', type=float, default=0.3, help='strength of dropout for RNN input')
 	parser.add_argument('--rnn_type', type=str, default='lstm', help='lstm or gru')
 	parser.add_argument('--rnn_dropout_p', type=float, default=0.5, help='strength of dropout for RNN layers')
 
-	parser.add_argument('--dim_hidden', type=int, default=1000, help='size of the rnn hidden layer')
-	parser.add_argument('--dim_word', type=int, default=500, help='the encoding size of each token in the vocabulary')
+	parser.add_argument('--dim_hidden', type=int, default=250, help='size of the rnn hidden layer')
+	parser.add_argument('--dim_word', type=int, default=250, help='the encoding size of each token in the vocabulary')
 	parser.add_argument('--dim_vid', type=int, default=500, help='dim of features of video frames')
 	parser.add_argument('--dim_opf', type=int, default=500, help='dim of features of optical flow frames')
+	parser.add_argument('--dim_r3d', type=int, default=512, help='dim of features of Resnet 3D')
 	parser.add_argument('--vocab_size', type=int, default=117 + 1, help='vocabulary size')
 
 	parser.add_argument('--learning_rate', type=float, default=1e-3, help='learning rate')
 	parser.add_argument('--learning_rate_decay_every', type=int, default=5,
-	                    help='every how many iterations thereafter to drop LR?(in epoch)')
+						help='every how many iterations thereafter to drop LR?(in epoch)')
 	parser.add_argument('--learning_rate_decay_rate', type=float, default=0.9)
 	parser.add_argument('--weight_decay', type=float, default=1e-3, help='strength of weight regularization')
 	parser.add_argument('--grad_clip', type=float, default=1.5, help='clip gradients normalized at this value')
@@ -38,9 +39,9 @@ def model_options():
 
 	parser.add_argument('--batch_size', type=int, default=32, help='minibatch size')
 	parser.add_argument('--save_checkpoint_every', type=int, default=5,
-	                    help='how often to save a model checkpoint (in epoch)?')
+						help='how often to save a model checkpoint (in epoch)?')
 	parser.add_argument('--checkpoint_path', type=str, default='./model_run_data',
-	                    help='directory to store checkpointed models')
+						help='directory to store checkpointed models')
 	parser.add_argument('--gpu', type=str, default='', help='gpu device number')
 	parser.add_argument('--resume', type=str, default='', help='path to latest checkpoint (*.pth)')
 	parser.add_argument('--shuffle', type=bool, default=True, help="boolean indicating shuffle required or not")
@@ -53,17 +54,18 @@ def model_options():
 
 	parser.add_argument('--num_workers', type=int, default=0, help="number of workers to load batch")
 	parser.add_argument('--train_annotation_path', type=str, default="data/training_annotation.json",
-	                    help="path to training annotations")
+						help="path to training annotations")
 	parser.add_argument('--resolution', type=int, default=224, help="frame resolution")
 	parser.add_argument('--optical_flow_type', type=str, default='dense_hsv',
-	                    help='dense_hsv/dense_lines/dense_warp/lucas_kanade')
+						help='dense_hsv/dense_lines/dense_warp/lucas_kanade')
 	parser.add_argument('--optical_flow_train_dataset_path', type=str, default="./data/train/optical_flow",
-	                    help="train dataset path for optical flow images")
+						help="train dataset path for optical flow images")
 	parser.add_argument('--optical_flow_test_dataset_path', type=str, default='./data/test/optical_flow',
-	                    help='test dataset path for optical flow images')
+						help='test dataset path for optical flow images')
 	parser.add_argument("--image_rotation", type=float, default=7, help="image rotation angle in degrees.")
 	parser.add_argument('--mAP_k', type=int, default=5, help='mean Average Precision at k')
-	parser.add_argument('--mAP_k_print_interval', type=int, default=10, help='print stats interval for mAP@k')
+	parser.add_argument('--train_print_interval', type=int, default=10, help='mAP@k print stats interval for train')
+	parser.add_argument('--eval_print_interval', type=int, default=5, help='mAP@k print stats interval for mAP@k eval')
 	parser.add_argument('--data_split', type=str, default='train', help='sample data split (train, eval, test)')
 	return parser.parse_args()
 
@@ -78,6 +80,7 @@ def model_provider(opts):
 			max_len=opts["max_len"],
 			dim_vid=opts["dim_vid"],
 			dim_opf=opts["dim_opf"],
+			dim_r3d=opts["dim_r3d"],
 			rnn_cell=opts['rnn_type'],
 			n_layers=opts['num_layers'],
 			rnn_dropout_p=opts["rnn_dropout_p"],

@@ -122,7 +122,11 @@ def mapk(actual, predicted, k=5):
 def calculate_mapk_batch(topk_preds, annotations, k=5):
 	mAPk_scores = []
 	for i in range(3):
-		actual_list = annotations[:, i]
+		if torch.is_tensor(annotations):
+			actual_list = annotations[:, i].tolist()
+		else:
+			actual_list = annotations[:, i]
+
 		predicted_list = topk_preds[i].tolist()
 		mAPk = mapk(actual_list, predicted_list, k)
 		mAPk_scores.append(mAPk)
@@ -137,16 +141,16 @@ def calculate_training_mAPk(dataloader, model, train_ann_dict, opts=None):
 	for batch_idx, (video_ids, vid_tensor, opf_tensor) in enumerate(dataloader):
 		vid_tensor = vid_tensor.to(device)
 		opf_tensor = opf_tensor.to(device)
-		batch_ann_t = [
+		batch_ann_arr = np.array([
 			[train_ann_dict[item][0], train_ann_dict[item][1], train_ann_dict[item][2]] for item in video_ids
-		]
+		])
 
 		model.eval()
 		with torch.no_grad():
 			_, topk_preds_list = model(x_vid=vid_tensor, x_opf=opf_tensor, target_y=None, top_k=opts["mAP_k"])
 
 			# calculate mean average precision
-			mAPk_scores = calculate_mapk_batch(topk_preds_list, batch_ann_t, opts["mAP_k"])
+			mAPk_scores = calculate_mapk_batch(topk_preds_list, batch_ann_arr, opts["mAP_k"])
 			mAPk_obj1_scores.append(mAPk_scores[0])
 			mAPk_rel_scores.append(mAPk_scores[1])
 			mAPk_obj2_scores.append(mAPk_scores[2])
