@@ -23,7 +23,7 @@ class Encoder(nn.Module):
 		self.resnet50.eval()
 		for param in self.resnet50.parameters():
 			param.requires_grad = False
-		self.resnet50.fc = nn.Sequential(nn.Linear(2048, self.dim_vid), nn.ReLU(inplace=True), nn.Dropout(p=0.5))
+		self.resnet50.fc = nn.Sequential(nn.Linear(2048, self.dim_vid), nn.Dropout(p=0.5))
 
 		# encoder RNN
 		self.rnn = rnn_cell(self.dim_vid, self.dim_hidden, 1,
