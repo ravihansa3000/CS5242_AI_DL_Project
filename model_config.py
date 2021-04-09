@@ -43,7 +43,7 @@ def model_options():
 	parser.add_argument('--disable_tf_after_epoch', type=int, default=20,
 	                    help='disable teacher forcing after how many epochs (use only predictions)')
 
-	parser.add_argument('--batch_size', type=int, default=20, help='minibatch size')
+	parser.add_argument('--batch_size', type=int, default=18, help='minibatch size')
 	parser.add_argument('--save_checkpoint_every', type=int, default=1,
 	                    help='how often to save a model checkpoint (in epoch)?')
 	parser.add_argument('--checkpoint_path', type=str, default='./model_run_data',
@@ -71,6 +71,11 @@ def model_options():
 	parser.add_argument('--mAP_k_print_interval', type=int, default=5, help='print stats interval for mAP@k')
 	parser.add_argument('--data_split', type=str, default='test', help='sample data split (train, eval, test)')
 	parser.add_argument("--image_rotation", type=float, default=7, help='rotate frame by(in degrees)')
+	parser.add_argument("--h_translate", type=float, default=0.3, help="horizontal translation as fraction of frame height")
+	parser.add_argument("--w_translate", type=float, default=0.3, help="vertical translation as fraction of frame height")
+	parser.add_argument("--min_scale", type=float, default=0.8, help="minimum scale")
+	parser.add_argument("--max_scale", type=float, default=1.5, help="maximum scale")
+	parser.add_argument("--shear", type=float, default=7, help="shear angle")
 	return parser.parse_args()
 
 
@@ -93,8 +98,12 @@ def data_transformations(opts, mode):
 	if mode == 'train':
 		return transforms.Compose([
 			transforms.Resize((opts["resolution"], 3 * opts["resolution"] // 2)),
-			transforms.RandomRotation(opts["image_rotation"]),
-			transforms.GaussianBlur(5, 1.),
+			transforms.RandomAffine(
+				degrees=opts["image_rotation"], 
+				translate=(opts["w_translate"], opts["h_translate"]),
+				scale=(opts["min_scale"], opts["max_scale"]),
+				shear=opts["shear"]
+			),
 			transforms.ToTensor(),
 			transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
 		])
