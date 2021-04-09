@@ -114,7 +114,7 @@ def get_eval_dataloader(opts):
 		opf_root=os.path.join(opts['optical_flow_test_dataset_path'], opts['optical_flow_type']),
 		n_samples=opts["test_dataset_size"],
 		transform_vid=data_transformations_vid(opts, mode='test'),
-		transform_opf=data_transformations_opf(opts)
+		transform_opf=data_transformations_opf(opts, mode='test'),
 	)
 	dataloader = DataLoader(vrdataset, batch_size=opts["batch_size"], shuffle=False, num_workers=opts["num_workers"])
 	return dataloader

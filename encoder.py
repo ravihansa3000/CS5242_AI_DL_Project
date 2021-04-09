@@ -1,4 +1,5 @@
 import math
+import os
 
 import torch
 import torch.nn.functional as F
@@ -7,19 +8,18 @@ import torchvision.models as models
 from torch.autograd import Variable
 
 from utils import init_hidden
+from models.i3d import InceptionI3d
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class Encoder(nn.Module):
-	def __init__(self, dim_vid=500, dim_opf=500, dim_r3d=500, dim_hidden=1000, rnn_cell=nn.LSTM, n_layers=1,
-				 rnn_dropout_p=0.5):
+	def __init__(self, dim_vid=500, dim_opf=500, dim_hidden=1000, rnn_cell=nn.LSTM, n_layers=1, rnn_dropout_p=0.5):
 		"""Load the pretrained CNNs and replace top fc layer."""
 		super(Encoder, self).__init__()
 
 		self.dim_vid = dim_vid
 		self.dim_opf = dim_opf
-		self.dim_r3d = dim_r3d
 		self.dim_hidden = dim_hidden
 		self.rnn_cell = rnn_cell
 
@@ -37,30 +37,23 @@ class Encoder(nn.Module):
 		self.enc_cnn_vid = enc_cnn_vid
 
 		# CNN for encoding optical flow images
-		enc_cnn_opf = models.resnet50(pretrained=True).to(device)
+		enc_cnn_opf = InceptionI3d(
+			num_classes=400,
+			spatial_squeeze=True,
+			final_endpoint='Logits',
+			in_channels=3,
+			dropout_keep_prob=0.5
+		).to(device)
+		assert os.path.isfile("data/rgb_imagenet.pth")
+		checkpoint = torch.load("data/rgb_imagenet.pth")
+		enc_cnn_opf.load_state_dict(checkpoint)
+
 		enc_cnn_opf.eval()
 		for param in enc_cnn_opf.parameters():
 			param.requires_grad = False
 
-		enc_cnn_opf.fc = nn.Sequential(
-			nn.Linear(2048, self.dim_opf),
-			nn.ReLU(True),
-			nn.Dropout(p=0.5),
-		).to(device)
+		enc_cnn_opf.replace_logits(self.dim_opf)
 		self.enc_cnn_opf = enc_cnn_opf
-
-		# CNN for activity detection
-		# enc_cnn_r3d = nn.Sequential(
-		#     *list(models.video.r3d_18(pretrained=True).children())[:-1]
-		# ).to(device)
-		# enc_cnn_r3d.eval()
-		# for param in enc_cnn_r3d.parameters():
-		#     param.requires_grad = False
-
-		# self.enc_cnn_r3d = enc_cnn_r3d
-		# self.fc1_r3d = nn.Linear(512, self.dim_r3d).to(device)
-		# torch.nn.init.xavier_uniform_(self.fc1_r3d.weight)
-		# self.dropout_r3d = nn.Dropout2d(0.3).to(device)
 
 		# encoder RNN
 		self.rnn = rnn_cell(
@@ -83,25 +76,21 @@ class Encoder(nn.Module):
 	def forward(self, x_vid: torch.Tensor, x_opf: torch.Tensor):
 		"""Convert a batch of videos into embeddings and feed them into the encoder RNN"""
 		assert (x_vid.shape[0] == x_opf.shape[0])
-		assert (x_vid.shape[1] == x_opf.shape[1])
 		batch_size = x_vid.shape[0]
 		n_frames = x_vid.shape[1]
 		vid_encoded = []
-		opf_encoded = []
+		# opf_encoded = []
 		for i in range(batch_size):
 			vid_encoded.append(self.enc_cnn_vid(x_vid[i]))
-			opf_encoded.append(self.enc_cnn_opf(x_opf[i]))
 
 		vid_feats = torch.stack(vid_encoded, dim=0)  # batch_size, n_frames, dim_vid
-		opf_feats = torch.stack(opf_encoded, dim=0)  # batch_size, n_frames, dim_opf
+		opf_feats = self.enc_cnn_opf(x_opf)
+		t = x_opf.size(2)
+		opf_feats = F.interpolate(opf_feats, t, mode="linear", align_corners=False)
+		opf_feats = opf_feats.permute(0, 2, 1)
 
 		# concat original image features and optical flow features; (batch_size, n_frames, dim_vid + dim_opf)
 		combined_feats = torch.cat((vid_feats[:, :n_frames, :], opf_feats[:, :n_frames, :]), dim=2)
-
-		output_r3d = None
-		# output_r3d = self.enc_cnn_r3d(x_vid.permute(0, 2, 1, 3, 4)).squeeze(4).squeeze(3).squeeze(2)
-		# output_r3d = F.relu(self.fc1_r3d(output_r3d))
-		# output_r3d = self.dropout_r3d(output_r3d)
 
 		# add padding frames for sequence of words (3 elements)
 		padding_frames = Variable(
@@ -111,7 +100,7 @@ class Encoder(nn.Module):
 
 		state = None
 		output_rnn, _ = self.rnn(rnn_input, state)  # batch_size, n_frames + 3, dim_hidden
-		return output_rnn, output_r3d
+		return output_rnn
 
 	def _init_modules(self):
 		for m in self.modules():
@@ -129,6 +118,4 @@ class Encoder(nn.Module):
 		self.enc_cnn_vid.fc.train(mode)
 
 		self.enc_cnn_opf.eval()
-		self.enc_cnn_opf.fc.train(mode)
-
-		# self.enc_cnn_r3d.eval()
+		self.enc_cnn_opf.logits.train(mode)

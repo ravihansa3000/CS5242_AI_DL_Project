@@ -12,7 +12,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class S2VTModel(nn.Module):
 	def __init__(self, vocab_size=117 + 1, dim_hidden=250, dim_word=250, max_len=3, dim_vid=500, dim_opf=500,
-				 dim_r3d=500, sos_id=117, n_layers=1, rnn_cell='lstm', input_dropout_p=0.5, rnn_dropout_p=0.5):
+				 sos_id=117, n_layers=1, rnn_cell='lstm', input_dropout_p=0.5, rnn_dropout_p=0.5):
 		super(S2VTModel, self).__init__()
 		if rnn_cell.lower() == 'lstm':
 			self.rnn_cell = nn.LSTM
@@ -21,7 +21,6 @@ class S2VTModel(nn.Module):
 
 		self.dim_vid = dim_vid  # features of video frames are embedded to a 500 dimensional space
 		self.dim_opf = dim_opf  # features of optical flow frames are embedded to a 500 dimensional space
-		self.dim_r3d = dim_r3d
 		self.dim_outputs = [35, 82, 35]  # objects: 35, relationships: 82; <object1>,<relationship>,<object2>
 		self.vocab_size = vocab_size  # number of total embeddings
 		self.dim_hidden = dim_hidden  # LSTM hidden feature dimension
@@ -41,7 +40,6 @@ class S2VTModel(nn.Module):
 		self.encoder = Encoder(
 			dim_vid=self.dim_vid,
 			dim_opf=self.dim_opf,
-			dim_r3d=self.dim_r3d,
 			dim_hidden=dim_hidden,
 			rnn_cell=self.rnn_cell,
 			n_layers=n_layers,
@@ -96,7 +94,7 @@ class S2VTModel(nn.Module):
 		:return:
 		"""
 		batch_size = x_vid.shape[0]
-		enc_out, r3d_out = self.encoder(x_vid, x_opf)
+		enc_out = self.encoder(x_vid, x_opf)
 
 		input1 = enc_out[:, :30, :]  # input1: (batch_size, 30, dim_hidden)
 		input2 = enc_out[:, 30:, :]  # input2: (batch_size, 3, dim_hidden)
@@ -143,11 +141,6 @@ class S2VTModel(nn.Module):
 				dropped_out = self.output_dropout(rnn_out.view(-1, self.dim_rnn_out))
 				dropped_out = dropped_out.view(batch_size, self.dim_rnn_out)
 
-				# concat R3D features for <relationship> training
-				# if i == 1:
-				#     cnn_r3d_combined = torch.cat((dropped_out, r3d_out), dim=1)
-				#     net_out = self.out_lin_mods[i](r3d_out)
-
 				net_out = self.out_lin_mods[i](dropped_out)
 				seq_probs.append(net_out)
 		else:
@@ -162,11 +155,6 @@ class S2VTModel(nn.Module):
 
 				dropped_out = self.output_dropout(rnn_out.view(-1, self.dim_rnn_out))
 				dropped_out = dropped_out.view(batch_size, self.dim_rnn_out)
-
-				# concat R3D features for <relationship> prediction
-				# if i == 1:
-				#     cnn_r3d_combined = torch.cat((dropped_out, r3d_out), dim=1)
-				#     net_out = self.out_lin_mods[i](cnn_r3d_combined)
 
 				net_out = self.out_lin_mods[i](dropped_out)
 				logits = F.log_softmax(net_out, dim=1)

@@ -131,7 +131,7 @@ def main(opts):
 			raise RuntimeError(f'no checkpoint found at {opts["resume"]}')
 
 	logging.info(model)
-	optimizer = optim.Adam(
+	optimizer = optim.Adamax(
 		model.parameters(),
 		lr=opts["learning_rate"],
 		weight_decay=opts["weight_decay"]
@@ -154,7 +154,7 @@ def main(opts):
 		opf_root=os.path.join(opts['optical_flow_train_dataset_path'], opts['optical_flow_type']),
 		n_samples=opts["train_dataset_size"],
 		transform_vid=data_transformations_vid(opts, mode='train'),
-		transform_opf=data_transformations_opf(opts)
+		transform_opf=data_transformations_opf(opts, mode='train'),
 	)
 	dataloader = DataLoader(
 		vrdataset,

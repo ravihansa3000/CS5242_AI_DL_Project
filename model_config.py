@@ -4,6 +4,7 @@ import torch
 from torchvision import transforms
 
 from S2VTModel import S2VTModel
+import custom_transformations
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -23,14 +24,13 @@ def model_options():
 	parser.add_argument('--dim_word', type=int, default=250, help='the encoding size of each token in the vocabulary')
 	parser.add_argument('--dim_vid', type=int, default=500, help='dim of features of video frames')
 	parser.add_argument('--dim_opf', type=int, default=500, help='dim of features of optical flow frames')
-	parser.add_argument('--dim_r3d', type=int, default=512, help='dim of features of Resnet 3D')
 	parser.add_argument('--vocab_size', type=int, default=117 + 1, help='vocabulary size')
 
 	parser.add_argument('--learning_rate', type=float, default=1e-3, help='learning rate')
 	parser.add_argument('--learning_rate_decay_every', type=int, default=5,
 						help='every how many iterations thereafter to drop LR?(in epoch)')
 	parser.add_argument('--learning_rate_decay_rate', type=float, default=0.9)
-	parser.add_argument('--weight_decay', type=float, default=1e-3, help='strength of weight regularization')
+	parser.add_argument('--weight_decay', type=float, default=0.1, help='strength of weight regularization')
 	parser.add_argument('--grad_clip', type=float, default=1.5, help='clip gradients normalized at this value')
 
 	parser.add_argument('--start_epoch', type=int, default=0, help='starting epoch number (useful in restarts)')
@@ -63,6 +63,13 @@ def model_options():
 	parser.add_argument('--optical_flow_test_dataset_path', type=str, default='./data/test/optical_flow',
 						help='test dataset path for optical flow images')
 	parser.add_argument("--image_rotation", type=float, default=7, help="image rotation angle in degrees.")
+	parser.add_argument("--h_translate", type=float, default=0.3,
+						help="horizontal translation as fraction of frame height")
+	parser.add_argument("--w_translate", type=float, default=0.3,
+						help="vertical translation as fraction of frame height")
+	parser.add_argument("--min_scale", type=float, default=0.8, help="minimum scale")
+	parser.add_argument("--max_scale", type=float, default=1.5, help="maximum scale")
+	parser.add_argument("--shear", type=float, default=7, help="shear angle")
 	parser.add_argument('--mAP_k', type=int, default=5, help='mean Average Precision at k')
 	parser.add_argument('--train_print_interval', type=int, default=10, help='mAP@k print stats interval for train')
 	parser.add_argument('--eval_print_interval', type=int, default=5, help='mAP@k print stats interval for mAP@k eval')
@@ -80,7 +87,6 @@ def model_provider(opts):
 			max_len=opts["max_len"],
 			dim_vid=opts["dim_vid"],
 			dim_opf=opts["dim_opf"],
-			dim_r3d=opts["dim_r3d"],
 			rnn_cell=opts['rnn_type'],
 			n_layers=opts['num_layers'],
 			rnn_dropout_p=opts["rnn_dropout_p"],
@@ -93,8 +99,12 @@ def data_transformations_vid(opts, mode):
 	if mode == 'train':
 		return transforms.Compose([
 			transforms.Resize((opts["resolution"], 3 * opts["resolution"] // 2)),
-			transforms.RandomRotation(opts["image_rotation"]),
-			transforms.GaussianBlur(5, 1.),
+			transforms.RandomAffine(
+				degrees=opts["image_rotation"],
+				translate=(opts["w_translate"], opts["h_translate"]),
+				scale=(opts["min_scale"], opts["max_scale"]),
+				shear=opts["shear"]
+			),
 			transforms.ToTensor(),
 			transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
 		])
@@ -108,9 +118,15 @@ def data_transformations_vid(opts, mode):
 		raise RuntimeError(f"Invalid mode: {mode}")
 
 
-def data_transformations_opf(opts):
-	return transforms.Compose([
-		transforms.Resize((opts["resolution"], 3 * opts["resolution"] // 2)),
-		transforms.ToTensor(),
-		transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-	])
+def data_transformations_opf(opts, mode):
+	if mode == 'train':
+		return transforms.Compose([
+			custom_transformations.RandomCrop(224),
+			custom_transformations.RandomHorizontalFlip(),
+		])
+	elif mode in ['test', 'eval']:
+		return transforms.Compose([
+			custom_transformations.CenterCrop(224),
+		])
+	else:
+		raise RuntimeError(f"Invalid mode: {mode}")

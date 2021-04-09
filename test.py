@@ -76,10 +76,10 @@ def test(dataloader, model, opts):
 				sample_ann_l = batch_ann_t[vid_idx].tolist()
 				ground_truth = f'{sample_ann_l[0]}--{sample_ann_l[1]}--{sample_ann_l[2]}'
 				ground_truth_ann = f'{obj_idx_map[sample_ann_l[0]]}--{rel_idx_map[sample_ann_l[1]]}' \
-				                   f'--{obj_idx_map[sample_ann_l[2]]}'
+								   f'--{obj_idx_map[sample_ann_l[2]]}'
 
 				preds_ann_list.append([obj1_k_str, rel_k_str, obj2_k_str, obj1_ann_str, rel_ann_str, obj2_ann_str,
-				                       ground_truth, ground_truth_ann])
+									   ground_truth, ground_truth_ann])
 			else:
 				preds_ann_list.append([obj1_k_str, rel_k_str, obj2_k_str, obj1_ann_str, rel_ann_str, obj2_ann_str])
 
@@ -90,7 +90,7 @@ def test(dataloader, model, opts):
 		mAPk_scores_str = f'{np.mean(obj1_scores):.3f}, {np.mean(rel_scores):.3f}, {np.mean(obj2_scores):.3f}'
 		logging.info(f'{opts["data_split"]} mAPk_scores: {mAPk_scores_str}')
 		preds_ann_df_cols = ['object1', 'relationship', 'object2', 'obj1_ann', 'rel_ann', 'obj2_ann',
-		                     'ground_truth', 'ground_truth_ann']
+							 'ground_truth', 'ground_truth_ann']
 	else:
 		preds_ann_df_cols = ['object1', 'relationship', 'object2', 'obj1_ann', 'rel_ann', 'obj2_ann']
 
@@ -124,7 +124,7 @@ def main(opts):
 		opf_root=os.path.join(opts['optical_flow_test_dataset_path'], opts['optical_flow_type']),
 		n_samples=opts["test_dataset_size"],
 		transform_vid=data_transformations_vid(opts, mode='test'),
-		transform_opf=data_transformations_opf(opts)
+		transform_opf=data_transformations_opf(opts, mode='test'),
 	)
 	dataloader = DataLoader(vrdataset, batch_size=opts["batch_size"], shuffle=False, num_workers=opts["num_workers"])
 
