@@ -55,7 +55,7 @@ class S2VTModel(nn.Module):
 			n_layers,
 			batch_first=True,
 			dropout=rnn_dropout_p,
-			bidirectional=True,
+			bidirectional=False,
 		).to(device)
 
 		# initialize RNN weights using Xavier method
@@ -66,7 +66,7 @@ class S2VTModel(nn.Module):
 				nn.init.xavier_normal_(param)
 
 		# dropout for RNN output
-		self.output_dropout = nn.Dropout(p=0.1).to(device)
+		self.output_dropout = nn.Dropout(p=0.4).to(device)
 
 		# linear layers that predict each element of a record
 		self.dim_rnn_out = 2 * self.dim_hidden if self.rnn.bidirectional else self.dim_hidden
@@ -134,11 +134,9 @@ class S2VTModel(nn.Module):
 				self.rnn.flatten_parameters()  # optimize for GPU
 
 				input_i = torch.cat((input2[:, i, :].unsqueeze(1), current_word_embed.unsqueeze(1)), dim=2)
-				input_i = self.input_dropout(input_i.view(-1, self.dim_hidden + self.dim_word))
-				input_i = input_i.view(batch_size, 1, self.dim_hidden + self.dim_word)
 				rnn_out, state = self.rnn(input_i, state)
 
-				dropped_out = self.output_dropout(rnn_out.view(-1, self.dim_rnn_out))
+				dropped_out = self.output_dropout(rnn_out)
 				dropped_out = dropped_out.view(batch_size, self.dim_rnn_out)
 
 				net_out = self.out_lin_mods[i](dropped_out)
@@ -149,11 +147,9 @@ class S2VTModel(nn.Module):
 				self.rnn.flatten_parameters()  # optimize for GPU
 
 				input_i = torch.cat((input2[:, i, :].unsqueeze(1), current_word_embed.unsqueeze(1)), dim=2)
-				input_i = self.input_dropout(input_i.view(-1, self.dim_hidden + self.dim_word))
-				input_i = input_i.view(batch_size, 1, self.dim_hidden + self.dim_word)
 				rnn_out, state = self.rnn(input_i, state)
 
-				dropped_out = self.output_dropout(rnn_out.view(-1, self.dim_rnn_out))
+				dropped_out = self.output_dropout(rnn_out)
 				dropped_out = dropped_out.view(batch_size, self.dim_rnn_out)
 
 				net_out = self.out_lin_mods[i](dropped_out)

@@ -30,7 +30,7 @@ def model_options():
 	parser.add_argument('--learning_rate_decay_every', type=int, default=5,
 						help='every how many iterations thereafter to drop LR?(in epoch)')
 	parser.add_argument('--learning_rate_decay_rate', type=float, default=0.9)
-	parser.add_argument('--weight_decay', type=float, default=0.01, help='strength of weight regularization')
+	parser.add_argument('--weight_decay', type=float, default=0.001, help='strength of weight regularization')
 	parser.add_argument('--grad_clip', type=float, default=1.5, help='clip gradients normalized at this value')
 
 	parser.add_argument('--start_epoch', type=int, default=0, help='starting epoch number (useful in restarts)')
