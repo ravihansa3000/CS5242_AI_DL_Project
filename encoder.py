@@ -52,7 +52,7 @@ class Encoder(nn.Module):
 		for param in enc_cnn_opf.parameters():
 			param.requires_grad = False
 
-		enc_cnn_opf.replace_logits(self.dim_opf)
+		enc_cnn_opf.replace_logits(self.dim_opf, device=device)
 		self.enc_cnn_opf = enc_cnn_opf
 
 		# encoder RNN
