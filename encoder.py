@@ -1,13 +1,10 @@
-import math
 import os
 
 import torch
-import torch.nn.functional as F
 import torch.nn as nn
+import torch.nn.functional as F
 import torchvision.models as models
-from torch.autograd import Variable
 
-from utils import init_hidden
 from models.i3d import InceptionI3d
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -71,8 +68,6 @@ class Encoder(nn.Module):
 			elif 'weight' in name:
 				nn.init.xavier_normal_(param)
 
-		self._init_modules()
-
 	def forward(self, x_vid: torch.Tensor, x_opf: torch.Tensor):
 		"""Convert a batch of videos into embeddings and feed them into the encoder RNN"""
 		assert (x_vid.shape[0] == x_opf.shape[0])
@@ -91,24 +86,9 @@ class Encoder(nn.Module):
 		# concat original image features and optical flow features; (batch_size, n_frames, dim_vid + dim_opf)
 		combined_feats = torch.cat((vid_feats[:, :n_frames, :], opf_feats[:, :n_frames, :]), dim=2)
 
-		# add padding frames for sequence of words (3 elements)
-		padding_frames = Variable(
-			torch.empty(batch_size, 3, self.dim_vid + self.dim_opf, dtype=vid_feats.dtype)
-		).zero_().to(device)
-		rnn_input = torch.cat((combined_feats, padding_frames), dim=1)
-
 		state = None
-		output_rnn, _ = self.rnn(rnn_input, state)  # batch_size, n_frames + 3, dim_hidden
-		return output_rnn
-
-	def _init_modules(self):
-		for m in self.modules():
-			if isinstance(m, nn.Conv3d):
-				n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-				m.weight.data.normal_(0, math.sqrt(2. / n))
-			elif isinstance(m, nn.BatchNorm3d):
-				m.weight.data.fill_(1)
-				m.bias.data.zero_()
+		output_rnn, output_state = self.rnn(combined_feats, state)  # batch_size, n_frames + 3, dim_hidden
+		return output_rnn, output_state
 
 	def train(self, mode=True):
 		super().train(mode)

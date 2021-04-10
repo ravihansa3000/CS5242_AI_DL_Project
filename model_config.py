@@ -22,12 +22,12 @@ def model_options():
 
 	parser.add_argument('--dim_hidden', type=int, default=500, help='size of the rnn hidden layer')
 	parser.add_argument('--dim_word', type=int, default=500, help='the encoding size of each token in the vocabulary')
-	parser.add_argument('--dim_vid', type=int, default=500, help='dim of features of video frames')
-	parser.add_argument('--dim_opf', type=int, default=500, help='dim of features of optical flow frames')
+	parser.add_argument('--dim_vid', type=int, default=250, help='dim of features of video frames')
+	parser.add_argument('--dim_opf', type=int, default=250, help='dim of features of optical flow frames')
 	parser.add_argument('--vocab_size', type=int, default=117 + 1, help='vocabulary size')
 
 	parser.add_argument('--learning_rate', type=float, default=1e-3, help='learning rate')
-	parser.add_argument('--learning_rate_decay_every', type=int, default=5,
+	parser.add_argument('--learning_rate_decay_every', type=int, default=10,
 						help='every how many iterations thereafter to drop LR?(in epoch)')
 	parser.add_argument('--learning_rate_decay_rate', type=float, default=0.9)
 	parser.add_argument('--weight_decay', type=float, default=0.001, help='strength of weight regularization')

@@ -1,11 +1,11 @@
 import random
 
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 from torch.autograd import Variable
+
 from encoder import Encoder
-from utils import init_hidden
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -40,36 +40,17 @@ class S2VTModel(nn.Module):
 		self.encoder = Encoder(
 			dim_vid=self.dim_vid,
 			dim_opf=self.dim_opf,
-			dim_hidden=dim_hidden,
+			dim_hidden=self.dim_hidden,
 			rnn_cell=self.rnn_cell,
 			n_layers=n_layers,
 			rnn_dropout_p=rnn_dropout_p,
 		).to(device)
 
-		# dropout for RNN input
-		self.input_dropout = nn.Dropout(p=input_dropout_p).to(device)
-
-		self.rnn = self.rnn_cell(
-			self.dim_hidden + self.dim_word,
-			self.dim_hidden,
-			n_layers,
-			batch_first=True,
-			dropout=rnn_dropout_p,
-			bidirectional=False,
-		).to(device)
-
-		# initialize RNN weights using Xavier method
-		for name, param in self.rnn.named_parameters():
-			if 'bias' in name:
-				nn.init.constant_(param, 0.0)
-			elif 'weight' in name:
-				nn.init.xavier_normal_(param)
-
 		# dropout for RNN output
 		self.output_dropout = nn.Dropout(p=0.4).to(device)
 
 		# linear layers that predict each element of a record
-		self.dim_rnn_out = 2 * self.dim_hidden if self.rnn.bidirectional else self.dim_hidden
+		self.dim_rnn_out = 2 * self.dim_hidden if self.encoder.rnn.bidirectional else self.dim_hidden
 		self.dim_lin_in = [self.dim_rnn_out, self.dim_rnn_out, self.dim_rnn_out]
 		self.out_lin_mods = nn.ModuleList(
 			[nn.Linear(item[0], item[1]).to(device) for item in zip(self.dim_lin_in, self.dim_outputs)]
@@ -94,21 +75,7 @@ class S2VTModel(nn.Module):
 		:return:
 		"""
 		batch_size = x_vid.shape[0]
-		enc_out = self.encoder(x_vid, x_opf)
-
-		input1 = enc_out[:, :30, :]  # input1: (batch_size, 30, dim_hidden)
-		input2 = enc_out[:, 30:, :]  # input2: (batch_size, 3, dim_hidden)
-
-		# https://github.com/pytorch/pytorch/issues/3920
-		# paddings to be used for the 2nd layer
-		padding_words = Variable(torch.empty(batch_size, 30, self.dim_word, dtype=x_vid.dtype)).zero_().to(device)
-
-		# concatenate paddings (for the 2nd layer) with output from the 1st layer
-		input1 = torch.cat((input1, padding_words), dim=2)  # input1: (batch_size, 30, dim_hidden + dim_word)
-
-		# feed concatenated output from 1st layer to the 2nd layer
-		state = None
-		rnn_out, state = self.rnn(input1, state)  # rnn_out: (batch_size, 30, dim_hidden)
+		enc_out, state = self.encoder(x_vid, x_opf)
 
 		seq_probs = []
 		seq_k_preds = []
@@ -131,10 +98,8 @@ class S2VTModel(nn.Module):
 					# offset embeddings for <relationship> entity type since predictions are 0-indexed
 					current_word_embed = self.embedding(torch.add(top_preds, 35) if i == 1 else top_preds)
 
-				self.rnn.flatten_parameters()  # optimize for GPU
-
-				input_i = torch.cat((input2[:, i, :].unsqueeze(1), current_word_embed.unsqueeze(1)), dim=2)
-				rnn_out, state = self.rnn(input_i, state)
+				self.encoder.rnn.flatten_parameters()  # optimize for GPU
+				rnn_out, state = self.encoder.rnn(current_word_embed.unsqueeze(1), state)
 
 				dropped_out = self.output_dropout(rnn_out)
 				dropped_out = dropped_out.view(batch_size, self.dim_rnn_out)
@@ -144,10 +109,8 @@ class S2VTModel(nn.Module):
 		else:
 			current_word_embed = self.embedding(Variable(torch.LongTensor([self.sos_id] * batch_size)).to(device))
 			for i in range(self.max_length):
-				self.rnn.flatten_parameters()  # optimize for GPU
-
-				input_i = torch.cat((input2[:, i, :].unsqueeze(1), current_word_embed.unsqueeze(1)), dim=2)
-				rnn_out, state = self.rnn(input_i, state)
+				self.encoder.rnn.flatten_parameters()  # optimize for GPU
+				rnn_out, state = self.encoder.rnn(current_word_embed.unsqueeze(1), state)
 
 				dropped_out = self.output_dropout(rnn_out)
 				dropped_out = dropped_out.view(batch_size, self.dim_rnn_out)
