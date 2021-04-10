@@ -2,6 +2,7 @@ import logging
 import os
 import subprocess
 
+import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -119,10 +120,14 @@ def mapk(actual, predicted, k=5):
 	return np.mean([apk(a, p, k) for a, p in zip(actual, predicted)])
 
 
-def calculate_mapk_batch(topk_preds, annotations_t, k=5):
+def calculate_mapk_batch(topk_preds, annotations, k=5):
 	mAPk_scores = []
 	for i in range(3):
-		actual_list = annotations_t[:, i].tolist()
+		if torch.is_tensor(annotations):
+			actual_list = annotations[:, i].tolist()
+		else:
+			actual_list = annotations[:, i]
+
 		predicted_list = topk_preds[i].tolist()
 		mAPk = mapk(actual_list, predicted_list, k)
 		mAPk_scores.append(mAPk)
@@ -130,23 +135,23 @@ def calculate_mapk_batch(topk_preds, annotations_t, k=5):
 	return mAPk_scores
 
 
-def calculate_training_mAPk(dataloader, model, training_annotation, opts=None):
+def calculate_training_mAPk(dataloader, model, train_ann_dict, opts=None):
 	mAPk_obj1_scores = []
 	mAPk_rel_scores = []
 	mAPk_obj2_scores = []
-	for batch_idx, (video_ids, videos_tensor, videos_tensor_alternate) in enumerate(dataloader):
-		videos_tensor = videos_tensor.to(device)
-		annotations_t = torch.LongTensor([
-			[training_annotation[item][0], training_annotation[item][1], training_annotation[item][2]]
-			for item in video_ids
-		]).to(device)
+	for batch_idx, (video_ids, vid_tensor, opf_tensor) in enumerate(dataloader):
+		vid_tensor = vid_tensor.to(device)
+		opf_tensor = opf_tensor.to(device)
+		batch_ann_arr = np.array([
+			[train_ann_dict[item][0], train_ann_dict[item][1], train_ann_dict[item][2]] for item in video_ids
+		])
 
 		model.eval()
 		with torch.no_grad():
-			_, topk_preds_list = model(x=videos_tensor, x_alternate=videos_tensor_alternate, target_variable=None, top_k=opts["mAP_k"])
+			_, topk_preds_list = model(x_vid=vid_tensor, x_opf=opf_tensor, target_y=None, top_k=opts["mAP_k"])
 
 			# calculate mean average precision
-			mAPk_scores = calculate_mapk_batch(topk_preds_list, annotations_t, opts["mAP_k"])
+			mAPk_scores = calculate_mapk_batch(topk_preds_list, batch_ann_arr, opts["mAP_k"])
 			mAPk_obj1_scores.append(mAPk_scores[0])
 			mAPk_rel_scores.append(mAPk_scores[1])
 			mAPk_obj2_scores.append(mAPk_scores[2])

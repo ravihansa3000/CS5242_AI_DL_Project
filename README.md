@@ -1,16 +1,6 @@
 # CS5242_AI_DL_Project
 Video Captioning of ILVSRC2016-VID dataset
 
-## Sync to SoC Cluster
-
-rsync -art ./ nus_soc_xgpe1:~/CS5242_AI_DL_Project.git
-
-## Sync to NSCC
-
-rsync -art ./ nus_nscc_stu:~/Documents/CS5242_AI_DL_Project.git
-
-rsync -art ./ nus_nscc_proj:~/Akila/CS5242_AI_DL_Project.git
-
 ## Train
 
 - Run the bash script on a GPU enabled system
@@ -34,16 +24,33 @@ conda activate cs5242_proj
 bash ./run_train.sh --batch_size 25 --learning_rate 3e-5
 ```
 
+
 ## Setup conda environment
 
 ```
-conda env create --file environment.yml --name cs5242_proj
+# for CUDA 10.1 + pytorch 1.7.1
+conda env create --file environment_pyt171_cuda101.yml --name cs5242_proj
+```
+
+
+## Sync to SoC Cluster
+
+```
+rsync -art ./ nus_soc_xgpe1:~/CS5242_AI_DL_Project.git
+```
+
+## Sync to NSCC
+
+```
+rsync -art ./ nus_nscc_stu:~/Documents/CS5242_AI_DL_Project.git
+
+rsync -art ./ nus_nscc_proj:~/Akila/CS5242_AI_DL_Project.git
 ```
 
 ## Download model to local
 
 ```
-rsync nus_soc_xgpe1:/home/stuproj/cs5242b4/CS5242_AI_DL_Project.git/model_run_data/model_<index>.pth  ~/Downloads/trained_model.pth
+rsync nus_soc_xgpe1:~/CS5242_AI_DL_Project.git/model_run_data/model_<index>.pth  ~/Downloads/trained_model.pth
 
 ln -sf ~/Downloads/trained_model.pth ./model_run_data/trained_model.pth
 ```
@@ -51,7 +58,7 @@ ln -sf ~/Downloads/trained_model.pth ./model_run_data/trained_model.pth
 ## Download csv output to local
 
 ```
-rsync nus_soc_xgpe1:/home/stuproj/cs5242b4/CS5242_AI_DL_Project.git/model_run_data/*.csv  ./model_run_data/
+rsync nus_soc_xgpe1:~/CS5242_AI_DL_Project.git/model_run_data/*.csv  ./model_run_data/
 ```
 
 

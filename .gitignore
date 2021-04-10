@@ -1,8 +1,5 @@
 *.csv
 
-# Models
-models/
-
 # Dataset
 data/
 
