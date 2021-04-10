@@ -23,7 +23,7 @@ class S2VTModel(nn.Module):
 		self.dim_vid = dim_vid
 
 		# initialize the encoder cnn
-		self.encoder = Encoder(dim_vid=self.dim_vid, dim_hidden=dim_hidden, rnn_cell=self.rnn_cell).to(device)
+		self.encoder = Encoder(dim_vid=self.dim_vid, dim_hidden=dim_hidden, rnn_cell=self.rnn_cell, rnn_dropout_p=rnn_dropout_p).to(device)
 
 		# objects: 35, relationships: 82; <object1>,<relationship>,<object2>
 		self.dim_outputs = [35, 82, 35]

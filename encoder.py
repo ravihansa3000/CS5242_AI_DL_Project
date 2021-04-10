@@ -60,6 +60,6 @@ class Encoder(nn.Module):
 
 		rnn_input = torch.stack(vid_feats_list, dim=1)
 
-		state = init_hidden(batch_size, 1, self.dim_hidden)
+		state = init_hidden(batch_size, 2, self.dim_hidden)
 		output, _ = self.rnn(rnn_input, state)  # batch_size, 33, dim_hidden
 		return output
