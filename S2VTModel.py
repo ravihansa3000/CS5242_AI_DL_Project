@@ -56,7 +56,6 @@ class S2VTModel(nn.Module):
 				nn.init.xavier_normal_(param)
 
 		self.out_lin_mods = nn.ModuleList([nn.Linear(self.dim_hidden, dim_out).to(device) for dim_out in self.dim_outputs])
-		self.dropout = nn.ModuleList([nn.Dropout(p=0.5) for _ in range(3)])
 
 		for m_lin in self.out_lin_mods:
 			torch.nn.init.xavier_uniform_(m_lin.weight)
@@ -120,7 +119,6 @@ class S2VTModel(nn.Module):
 				inp = torch.cat((input2[:, i, :].unsqueeze(1), current_word_embed.unsqueeze(1)), dim=2)
 				rnn_out, state = self.rnn(inp, state)
 
-				rnn_out = self.dropout[i](rnn_out)
 				net_out = self.out_lin_mods[i](rnn_out.squeeze(1))
 				seq_probs.append(net_out)
 		else:
@@ -132,7 +130,6 @@ class S2VTModel(nn.Module):
 				inp = torch.cat((input2[:, i, :].unsqueeze(1), current_word_embed.unsqueeze(1)), dim=2)
 				rnn_out, state = self.rnn(inp, state)
 
-				rnn_out = self.dropout[i](rnn_out)
 				net_out = self.out_lin_mods[i](rnn_out.squeeze(1))
 				logits = F.log_softmax(net_out, dim=1)
 

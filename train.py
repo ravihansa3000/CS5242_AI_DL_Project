@@ -67,7 +67,7 @@ def train(dataloader, model, optimizer, lr_scheduler, opts):
 
 			# print stats for the step
 			losses_str = f"{total_loss:.6f} :: {loss1:.6f}, {loss2:.6f}, {loss3:.6f}"
-			optimizer_lr_str = f'{optimizer.param_groups[0]["lr"]:.3f}'
+			optimizer_lr_str = f'{optimizer.param_groups[0]["lr"]:.9f}'
 			logging.info(f"Step update | epoch: {epoch}, batch_idx: {batch_idx}, step: {step}, "
 			             f"loss: {losses_str} | optimizer_lr: {optimizer_lr_str}")
 

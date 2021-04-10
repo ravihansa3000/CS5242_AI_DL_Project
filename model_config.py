@@ -76,6 +76,10 @@ def model_options():
 	parser.add_argument("--min_scale", type=float, default=0.8, help="minimum scale")
 	parser.add_argument("--max_scale", type=float, default=1.5, help="maximum scale")
 	parser.add_argument("--shear", type=float, default=7, help="shear angle")
+	parser.add_argument("--brightness", type=float, default=0.5, help="brightness")
+	parser.add_argument("--contrast", type=float, default=0.5, help="contrast")
+	parser.add_argument("--saturation", type=float, default=0.5, help="saturation")
+	parser.add_argument("--hue", type=float, default=0.3, help="hue")
 	return parser.parse_args()
 
 
@@ -98,6 +102,12 @@ def data_transformations(opts, mode):
 	if mode == 'train':
 		return transforms.Compose([
 			transforms.Resize((opts["resolution"], 3 * opts["resolution"] // 2)),
+			transforms.ColorJitter(
+				brightness=opts["brightness"],
+				contrast=opts["contrast"],
+				saturation=opts["saturation"],
+				hue=opts["hue"]	
+			),
 			transforms.RandomAffine(
 				degrees=opts["image_rotation"], 
 				translate=(opts["w_translate"], opts["h_translate"]),

@@ -1,6 +1,6 @@
 import os
 
-import cv2
+#import cv2
 import torch
 from PIL import Image
 from torch.utils.data import Dataset
