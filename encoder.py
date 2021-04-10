@@ -59,7 +59,7 @@ class Encoder(nn.Module):
 			n_layers,
 			batch_first=True,
 			dropout=rnn_dropout_p,
-			bidirectional=False
+			bidirectional=True
 		).to(device)
 
 		for name, param in self.rnn.named_parameters():
