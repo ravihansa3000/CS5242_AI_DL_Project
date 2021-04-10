@@ -29,7 +29,7 @@ def model_options():
 	parser.add_argument('--learning_rate', type=float, default=1e-3, help='learning rate')
 	parser.add_argument('--learning_rate_decay_every', type=int, default=10,
 						help='every how many iterations thereafter to drop LR?(in epoch)')
-	parser.add_argument('--learning_rate_decay_rate', type=float, default=0.9)
+	parser.add_argument('--learning_rate_decay_rate', type=float, default=0.65)
 	parser.add_argument('--weight_decay', type=float, default=0.001, help='strength of weight regularization')
 	parser.add_argument('--grad_clip', type=float, default=1.5, help='clip gradients normalized at this value')
 
@@ -74,6 +74,10 @@ def model_options():
 	parser.add_argument('--train_print_interval', type=int, default=10, help='mAP@k print stats interval for train')
 	parser.add_argument('--eval_print_interval', type=int, default=5, help='mAP@k print stats interval for mAP@k eval')
 	parser.add_argument('--data_split', type=str, default='train', help='sample data split (train, eval, test)')
+	parser.add_argument("--brightness", type=float, default=0.5, help="brightness")
+	parser.add_argument("--contrast", type=float, default=0.5, help="contrast")
+	parser.add_argument("--saturation", type=float, default=0.5, help="saturation")
+	parser.add_argument("--hue", type=float, default=0.3, help="hue")
 	return parser.parse_args()
 
 
@@ -99,6 +103,12 @@ def data_transformations_vid(opts, mode):
 	if mode == 'train':
 		return transforms.Compose([
 			transforms.Resize((opts["resolution"], 3 * opts["resolution"] // 2)),
+			transforms.ColorJitter(
+				brightness=opts["brightness"],
+				contrast=opts["contrast"],
+				saturation=opts["saturation"],
+				hue=opts["hue"]
+			),
 			transforms.RandomAffine(
 				degrees=opts["image_rotation"],
 				translate=(opts["w_translate"], opts["h_translate"]),
