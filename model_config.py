@@ -20,7 +20,7 @@ def model_options():
 	parser.add_argument('--input_dropout_p', type=float, default=0.2,
 	                    help='strength of dropout in the Language Model RNN')
 	parser.add_argument('--rnn_type', type=str, default='lstm', help='lstm or gru')
-	parser.add_argument('--rnn_dropout_p', type=float, default=0,
+	parser.add_argument('--rnn_dropout_p', type=float, default=0.6,
 	                    help='strength of dropout in the Language Model RNN')
 
 	parser.add_argument('--dim_hidden', type=int, default=1000, help='size of the rnn hidden layer')
