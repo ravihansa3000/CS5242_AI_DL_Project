@@ -79,7 +79,6 @@ class Encoder(nn.Module):
 		batch_size = x_vid.shape[0]
 		n_frames = x_vid.shape[1]
 		vid_encoded = []
-		# opf_encoded = []
 		for i in range(batch_size):
 			vid_encoded.append(self.enc_cnn_vid(x_vid[i]))
 

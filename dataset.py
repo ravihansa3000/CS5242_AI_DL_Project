@@ -1,3 +1,4 @@
+import logging
 import os
 
 import cv2
@@ -6,11 +7,22 @@ import torch
 from PIL import Image
 from torch.utils.data import Dataset
 
+logging.basicConfig(
+	format='%(asctime)s %(levelname)-8s %(message)s',
+	level=logging.INFO,
+	datefmt='%Y-%m-%d %H:%M:%S')
 
-def load_rgb_frames(img_dir, vid, start, num):
+
+def load_rgb_frames(img_dir, vid_dir_name):
 	frames = []
-	for i in range(start, start + num):
-		img = cv2.imread(os.path.join(img_dir, vid, str(i).zfill(6) + '.jpg'))[:, :, [2, 1, 0]]
+	vid_path = os.path.join(img_dir, vid_dir_name)
+	frame_names_vid = sorted(os.listdir(vid_path))
+	for frame_vid in frame_names_vid:
+		if not frame_vid.endswith('.jpg'):
+			continue
+
+		img_path = os.path.join(img_dir, vid_dir_name, frame_vid)
+		img = cv2.imread(img_path)[:, :, [2, 1, 0]]
 		w, h, c = img.shape
 		if w < 226 or h < 226:
 			d = 226. - min(w, h)
@@ -70,11 +82,17 @@ class VRDataset(Dataset):
 		vid_dir_name = str(idx).zfill(6)
 		vid_path = os.path.join(self.root_dir_vid, vid_dir_name)
 		frame_names_vid = sorted(os.listdir(vid_path))
-		images_vid = [Image.open(os.path.join(vid_path, frame_vid)) for frame_vid in frame_names_vid]
+
+		images_vid = []
+		for frame_vid in frame_names_vid:
+			if not frame_vid.endswith('.jpg'):
+				continue
+			images_vid.append(Image.open(os.path.join(vid_path, frame_vid)))
+
 		if self.transform_vid:
 			images_vid = [self.transform_vid(image_vid) for image_vid in images_vid]
 
-		images_opf = load_rgb_frames(self.root_dir_vid, vid_dir_name, 1, 30)
+		images_opf = load_rgb_frames(self.root_dir_vid, vid_dir_name)
 		if self.transform_opf:
 			images_opf = self.transform_opf(images_opf)
 
