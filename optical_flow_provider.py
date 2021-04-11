@@ -46,7 +46,7 @@ class DenseOpticalFlow(IOpticalFlow):
 		next = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
 		flow = cv2.calcOpticalFlowFarneback(self.prev, next, None,
-		                                    0.5, 3, 15, 3, 5, 1.2, 0)
+											0.5, 3, 15, 3, 5, 1.2, 0)
 
 		result = self.makeResult(next, flow)
 		self.prev = next
@@ -95,14 +95,14 @@ class LucasKanadeOpticalFlow(IOpticalFlow):
 	def __init__(self):
 		# params for ShiTomasi corner detection
 		self.feature_params = dict(maxCorners=100,
-		                           qualityLevel=0.3,
-		                           minDistance=7,
-		                           blockSize=7)
+								   qualityLevel=0.3,
+								   minDistance=7,
+								   blockSize=7)
 
 		# Parameters for lucas kanade optical flow
 		self.lk_params = dict(winSize=(15, 15),
-		                      maxLevel=2,
-		                      criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
+							  maxLevel=2,
+							  criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
 
 		# Create some random colors
 		self.color = np.random.randint(0, 255, (100, 3))
@@ -118,7 +118,7 @@ class LucasKanadeOpticalFlow(IOpticalFlow):
 
 		# calculate optical flow
 		p1, st, err = cv2.calcOpticalFlowPyrLK(self.old_gray, frame_gray,
-		                                       self.p0, None, **self.lk_params)
+											   self.p0, None, **self.lk_params)
 
 		# Select good points
 		good_new = p1[st == 1]
