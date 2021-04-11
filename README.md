@@ -81,3 +81,22 @@ nvidia-docker -u $UID:$GID -v ~/Documents/CS5242_AI_DL_Project.git:/app/CS5242_A
     --rm -i --shm-size=1g --ulimit memlock=-1 \
     --ulimit stack=67108864 run nvcr.io/nvidia/pytorch:20.12-py3 /bin/sh
 ```
+## Reproducing Kaggle submission result
+Ensure the entire `cs-5242-project-nus-2021-semester2.zip` is extracted and placed in `./data/`. The path to the test set must be `data/test/test`.
+Download the [I3D pretrained model](https://github.com/piergiaj/pytorch-i3d/blob/master/models/rgb_imagenet.pt) and place it in `./data/` as a `.pth` file.
+Ensure that `./model_run_data/` is created. Edit `run_test.sh` to add the path to the trained model and execute `./run_test.sh`
+```
+#!/bin/bash
+
+stdout_file=./model_run_data/test.out
+printf "Running test.py \n"
+nohup python3 ./test.py --gpu=0 --trained_model=<path_to_trained_model> --batch_size 60 $* > $stdout_file 2>&1 &
+
+printf "stdout: $stdout_file \n"
+
+```
+Check `model_run_data/test.out` for output logs. The following csv file would contain the results:
+```
+model_run_data/preds_sub.csv
+```
+
