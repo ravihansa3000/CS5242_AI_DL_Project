@@ -22,8 +22,8 @@ def model_options():
 
 	parser.add_argument('--dim_hidden', type=int, default=500, help='size of the rnn hidden layer')
 	parser.add_argument('--dim_word', type=int, default=500, help='the encoding size of each token in the vocabulary')
-	parser.add_argument('--dim_vid', type=int, default=400, help='dim of features of video frames')
-	parser.add_argument('--dim_opf', type=int, default=100, help='dim of features of optical flow frames')
+	parser.add_argument('--dim_vid', type=int, default=300, help='dim of features of video frames')
+	parser.add_argument('--dim_opf', type=int, default=200, help='dim of features of optical flow frames')
 	parser.add_argument('--vocab_size', type=int, default=117 + 1, help='vocabulary size')
 
 	parser.add_argument('--learning_rate', type=float, default=1e-3, help='learning rate')
