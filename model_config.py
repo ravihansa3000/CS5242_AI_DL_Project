@@ -27,7 +27,7 @@ def model_options():
 	parser.add_argument('--dim_word', type=int, default=500,
 
 	                    help='the encoding size of each token in the vocabulary, and the video.')
-	parser.add_argument('--dim_vid', type=int, default=1000, help='dim of features of video frames')
+	parser.add_argument('--dim_vid', type=int, default=500, help='dim of features of video frames')
 	parser.add_argument('--vocab_size', type=int, default=117 + 1, help='vocabulary size')
 
 	parser.add_argument('--learning_rate', type=float, default=1e-3, help='learning rate')

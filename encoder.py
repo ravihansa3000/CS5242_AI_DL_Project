@@ -26,7 +26,7 @@ class Encoder(nn.Module):
 		self.resnet50.fc = nn.Linear(2048, self.dim_vid)
 
 		# encoder RNN
-		self.rnn = rnn_cell(self.dim_vid, self.dim_hidden, num_layers=2,
+		self.rnn = rnn_cell(self.dim_vid, self.dim_hidden, num_layers=1,
 		                    batch_first=True, dropout=rnn_dropout_p, bidirectional=False).to(device)
 
 		for name, param in self.rnn.named_parameters():
@@ -50,16 +50,5 @@ class Encoder(nn.Module):
 
 		vid_feats = torch.stack(vid_imgs_encoded, dim=0)  # batch_size, 30, dim_vid
 
-		padding_frames = [
-			Variable(torch.empty(vid_feats.shape[0], self.dim_vid, dtype=vid_feats.dtype)).zero_().to(device)
-			for _ in range(3)
-		]
-
-		vid_feats_list = [vid_feats[:, i, :] for i in range(vid_feats.shape[1])]
-		vid_feats_list.extend(padding_frames)
-
-		rnn_input = torch.stack(vid_feats_list, dim=1)
-
-		state = init_hidden(batch_size, 2, self.dim_hidden)
-		output, _ = self.rnn(rnn_input, state)  # batch_size, 33, dim_hidden
-		return output
+		state = init_hidden(batch_size, 1, self.dim_hidden)
+		return self.rnn(vid_feats, state)  # batch_size, 30, dim_hidden

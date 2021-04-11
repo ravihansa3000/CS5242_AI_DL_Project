@@ -47,14 +47,6 @@ class S2VTModel(nn.Module):
 		# word embeddings lookup table with; + 1 for <sos>
 		self.embedding = nn.Embedding(self.vocab_size, self.dim_word)
 
-		self.rnn = self.rnn_cell(self.dim_hidden + self.dim_word, self.dim_hidden, n_layers,
-		                         batch_first=True, dropout=rnn_dropout_p).to(device)
-		for name, param in self.rnn.named_parameters():
-			if 'bias' in name:
-				nn.init.constant_(param, 0.0)
-			elif 'weight' in name:
-				nn.init.xavier_normal_(param)
-
 		self.out_lin_mods = nn.ModuleList([nn.Linear(self.dim_hidden, dim_out).to(device) for dim_out in self.dim_outputs])
 
 		for m_lin in self.out_lin_mods:
@@ -77,28 +69,11 @@ class S2VTModel(nn.Module):
 		:return:
 		"""
 		batch_size = x.shape[0]
-		enc_out = self.encoder(x)
-
-		input1 = enc_out[:, :30, :]  # input1: (batch_size, 30, dim_hidden)
-		input2 = enc_out[:, 30:, :]  # input2: (batch_size, 3, dim_word)
-
-		# https://github.com/pytorch/pytorch/issues/3920
-		# paddings to be used for the 2nd layer
-		padding_words = Variable(torch.empty(batch_size, 30, self.dim_word, dtype=x.dtype)).zero_().to(device)
-
-		# concatenate paddings (for the 2nd layer) with output from the 1st layer
-		inp = torch.cat((input1, padding_words), dim=2)
-
-		# feed concatenated output from 1st layer to the 2nd layer
-		state = init_hidden(batch_size, 1, self.dim_hidden)
-		rnn_out, state = self.rnn(inp, state)  # (batch_size, 30, dim_hidden)
+		_, state = self.encoder(x)
 
 		seq_probs = []
 		seq_k_preds = []
 		net_out = None
-
-		# By this point we have already fed input features (of 30 frames) to 1st layer of LSTM and padded concatenated
-		# inputs to 2nd layer of LSTM. Remaining 3 steps will be performed using word embeddings
 
 		if self.training:
 			sos_tensor = Variable(torch.LongTensor([[self.sos_id]] * batch_size)).to(device)
@@ -114,10 +89,9 @@ class S2VTModel(nn.Module):
 					# offset embeddings for <relationship> entity type since predictions are 0-indexed
 					current_word_embed = self.embedding(torch.add(top_preds, 35) if i == 1 else top_preds)
 
-				self.rnn.flatten_parameters()
+				self.encoder.rnn.flatten_parameters()
 
-				inp = torch.cat((input2[:, i, :].unsqueeze(1), current_word_embed.unsqueeze(1)), dim=2)
-				rnn_out, state = self.rnn(inp, state)
+				rnn_out, state = self.encoder.rnn(current_word_embed.unsqueeze(1), state)
 
 				net_out = self.out_lin_mods[i](rnn_out.squeeze(1))
 				seq_probs.append(net_out)
@@ -125,10 +99,9 @@ class S2VTModel(nn.Module):
 			current_word_embed = self.embedding(Variable(torch.LongTensor([self.sos_id] * batch_size)).to(device))
 			for i in range(self.max_length):
 				# optimize for GPU (applicable only when CUDA/GPU capability is present in the system)
-				self.rnn.flatten_parameters()
+				self.encoder.rnn.flatten_parameters()
 
-				inp = torch.cat((input2[:, i, :].unsqueeze(1), current_word_embed.unsqueeze(1)), dim=2)
-				rnn_out, state = self.rnn(inp, state)
+				rnn_out, state = self.encoder.rnn(current_word_embed.unsqueeze(1), state)
 
 				net_out = self.out_lin_mods[i](rnn_out.squeeze(1))
 				logits = F.log_softmax(net_out, dim=1)
