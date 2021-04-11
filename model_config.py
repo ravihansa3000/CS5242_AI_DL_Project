@@ -21,9 +21,9 @@ def model_options():
 	parser.add_argument('--rnn_dropout_p', type=float, default=0.5, help='strength of dropout for RNN layers')
 
 	parser.add_argument('--dim_hidden', type=int, default=500, help='size of the rnn hidden layer')
-	parser.add_argument('--dim_word', type=int, default=1000, help='the encoding size of each token in the vocabulary')
-	parser.add_argument('--dim_vid', type=int, default=500, help='dim of features of video frames')
-	parser.add_argument('--dim_opf', type=int, default=500, help='dim of features of optical flow frames')
+	parser.add_argument('--dim_word', type=int, default=500, help='the encoding size of each token in the vocabulary')
+	parser.add_argument('--dim_vid', type=int, default=300, help='dim of features of video frames')
+	parser.add_argument('--dim_opf', type=int, default=200, help='dim of features of optical flow frames')
 	parser.add_argument('--vocab_size', type=int, default=117 + 1, help='vocabulary size')
 
 	parser.add_argument('--learning_rate', type=float, default=1e-3, help='learning rate')
@@ -37,7 +37,7 @@ def model_options():
 	parser.add_argument('--end_epoch', type=int, default=200, help='ending epoch number')
 	parser.add_argument('--tf_rate', type=float, default=0.5, help='Probability for teacher forcing')
 
-	parser.add_argument('--batch_size', type=int, default=16, help='minibatch size')
+	parser.add_argument('--batch_size', type=int, default=25, help='minibatch size')
 	parser.add_argument('--save_checkpoint_every', type=int, default=5,
 						help='how often to save a model checkpoint (in epoch)?')
 	parser.add_argument('--checkpoint_path', type=str, default='./model_run_data',

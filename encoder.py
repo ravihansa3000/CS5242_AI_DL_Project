@@ -39,7 +39,7 @@ class Encoder(nn.Module):
 			spatial_squeeze=True,
 			final_endpoint='Logits',
 			in_channels=3,
-			dropout_keep_prob=0.5
+			dropout_keep_prob=0.6
 		).to(device)
 		assert os.path.isfile("data/rgb_imagenet.pth")
 		checkpoint = torch.load("data/rgb_imagenet.pth")

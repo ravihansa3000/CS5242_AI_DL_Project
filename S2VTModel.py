@@ -47,7 +47,7 @@ class S2VTModel(nn.Module):
 		).to(device)
 
 		# dropout for RNN output
-		self.output_dropout = nn.Dropout(p=0.2).to(device)
+		self.output_dropout = nn.Dropout(p=0.4).to(device)
 
 		# linear layers that predict each element of a record
 		self.dim_rnn_out = 2 * self.dim_hidden if self.encoder.rnn.bidirectional else self.dim_hidden
