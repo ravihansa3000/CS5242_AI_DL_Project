@@ -30,6 +30,7 @@ class TVL1(IOpticalFlow):
 		flow = np.round(flow).astype(int)
 		flow[flow >= 255] = 255
 		flow[flow <= 0] = 0
+		self.prev = frame
 		return flow
 
 
