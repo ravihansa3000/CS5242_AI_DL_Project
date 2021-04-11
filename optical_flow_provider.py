@@ -1,7 +1,6 @@
 import cv2
 import numpy as np
 
-
 class IOpticalFlow:
 	'''Interface of OpticalFlow classes'''
 
@@ -14,6 +13,24 @@ class IOpticalFlow:
 		result = frame.copy()
 		self.prev = frame
 		return result
+
+class TVL1(IOpticalFlow):
+
+	def set1stFrame(self, frame):
+		self.prev = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+	def apply(self, frame, bound=15):
+		"""Compute the TV-L1 optical flow."""
+		frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+		TVL1 = cv2.optflow.DualTVL1OpticalFlow_create()
+		flow = TVL1.calc(self.prev, frame, None)
+		assert flow.dtype == np.float32
+
+		flow = (flow + bound) * (255.0 / (2*bound))
+		flow = np.round(flow).astype(int)
+		flow[flow >= 255] = 255
+		flow[flow <= 0] = 0
+		return flow
 
 
 class DenseOpticalFlow(IOpticalFlow):
@@ -136,9 +153,13 @@ def OpticalFlowProvider(type):
 	def lucas_kanade():
 		return LucasKanadeOpticalFlow()
 
+	def tv_l1():
+		return TVL1()
+
 	return {
 		'dense_hsv': dense_by_hsv,
 		'dense_lines': dense_by_lines,
 		'dense_warp': dense_by_warp,
-		'lucas_kanade': lucas_kanade
+		'lucas_kanade': lucas_kanade,
+		'tv_l1': tv_l1
 	}.get(type, dense_by_lines)()

@@ -59,9 +59,9 @@ def generate_optical_flow_images(opts, data_split):
 			os.mkdir(video_folder_path)
 
 		of_images = to_optical_flow_images(video_frames, opts)
-		for frame_idx in range(len(of_images)):
-			cv2.imwrite(os.path.join(video_folder_path, padded_digit(frame_idx + 1) + '.jpg'), of_images[frame_idx])
-
+		for idx, frame in enumerate(of_images):
+			cv2.imwrite(os.path.join(video_folder_path, padded_digit(idx + 1) + '_0.jpg'), frame[:, :, 0])
+			cv2.imwrite(os.path.join(video_folder_path, padded_digit(idx + 1) + '_1.jpg'), frame[:, :, 1])
 		logging.info(f'{opts["optical_flow_type"]} optical flow image generated on video_ids: {video_ids}')
 
 

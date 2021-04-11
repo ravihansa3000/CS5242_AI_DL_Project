@@ -56,9 +56,9 @@ def model_options():
 	parser.add_argument('--train_annotation_path', type=str, default="data/training_annotation.json",
 						help="path to training annotations")
 	parser.add_argument('--resolution', type=int, default=224, help="frame resolution")
-	parser.add_argument('--optical_flow_type', type=str, default='dense_hsv',
-						help='dense_hsv/dense_lines/dense_warp/lucas_kanade')
-	parser.add_argument('--optical_flow_train_dataset_path', type=str, default="./data/train/optical_flow",
+	parser.add_argument('--optical_flow_type', type=str, default='tv_l1',
+						help='dense_hsv/dense_lines/dense_warp/lucas_kanade/tv_l1')
+	parser.add_argument('--optical_flow_train_dataset_path', type=str, default="data/train/optical_flow",
 						help="train dataset path for optical flow images")
 	parser.add_argument('--optical_flow_test_dataset_path', type=str, default='./data/test/optical_flow',
 						help='test dataset path for optical flow images')
